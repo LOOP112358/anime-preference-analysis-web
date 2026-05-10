@@ -67,3 +67,9 @@ SELECT
 FROM anime_post a
 JOIN user u ON a.user_id = u.user_id
 ORDER BY a.ani_id DESC;
+ALTER TABLE user
+MODIFY photo VARCHAR(255)
+DEFAULT '/static/default_avatar.jpg';
+UPDATE user
+SET photo = '/static/default_avatar.jpg'
+WHERE photo IS NULL OR photo = '';
