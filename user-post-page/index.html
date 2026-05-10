@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>用户中心 - 番剧角色分享</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<!-- 登录页 -->
+<div id="loginPage" class="login-container">
+  <div class="login-box">
+    <h2>用户中心 - 登录</h2>
+    <input type="text" id="username" placeholder="用户名">
+    <input type="password" id="password" placeholder="密码">
+    <button id="loginBtn">登录</button>
+  </div>
+</div>
+
+<!-- 主页面 -->
+<div id="mainLayout" style="display:none;">
+  <!-- 顶部栏 -->
+  <div class="top-bar">
+    <div class="logo">用户中心</div>
+    <div class="header-right">
+      <div class="user-greeting">欢迎你，<span id="nickname"></span></div>
+      <button id="logoutBtn">退出登录</button>
+    </div>
+  </div>
+
+  <div class="body-layout">
+    <!-- 左侧栏：首页、我的主页、我喜欢的番、我喜欢的角色 -->
+    <div class="main-menu">
+      <div class="menu-item" data-page="home">首页</div>
+      <div class="menu-item active" data-page="profile">我的主页</div>
+      <div class="menu-item" data-page="anime">我喜欢的番</div>
+      <div class="menu-item" data-page="char">我喜欢的角色</div>
+    </div>
+
+    <!-- 右侧内容区 -->
+    <div class="content">
+      <!-- 首页 -->
+      <div id="page-home" class="page">
+        <div class="card-container">
+          <h1>首页</h1>
+          <p>欢迎来到番剧角色分享平台</p>
+        </div>
+      </div>
+
+      <!-- 我的主页 -->
+      <div id="page-profile" class="page active">
+        <div class="profile-header">
+          <h1>我的主页</h1>
+          <button id="publishBtn">发布</button>
+        </div>
+
+        <!-- 个人信息卡片 -->
+        <div class="profile-card">
+          <img id="avatar" src="" alt="头像">
+          <div class="profile-text">
+            <h2 id="usernameShow"></h2>
+            <p>ID：<span id="userIdShow"></span></p>
+            <p id="introShow"></p>
+          </div>
+        </div>
+
+        <!-- 搜索栏 -->
+        <div class="search-bar">
+          <input type="text" id="searchInput" placeholder="搜索番剧/角色...">
+        </div>
+
+        <!-- 角色列表（默认显示） -->
+        <div class="card-list" id="profileCharList"></div>
+      </div>
+
+      <!-- 我喜欢的番 -->
+      <div id="page-anime" class="page">
+        <div class="profile-header">
+          <h1>我喜欢的番</h1>
+          <button id="publishAnimeBtn">发布番剧</button>
+        </div>
+        <div class="search-bar">
+          <input type="text" id="searchAnimeInput" placeholder="搜索番剧...">
+        </div>
+        <div class="card-list" id="animeList"></div>
+      </div>
+
+      <!-- 我喜欢的角色 -->
+      <div id="page-char" class="page">
+        <div class="profile-header">
+          <h1>我喜欢的角色</h1>
+          <button id="publishCharBtn">发布角色</button>
+        </div>
+        <div class="search-bar">
+          <input type="text" id="searchCharInput" placeholder="搜索角色...">
+        </div>
+        <div class="card-list" id="charList"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 发布弹窗 -->
+  <div id="publishModal" class="modal">
+    <div class="modal-content">
+      <span class="close-btn" id="closeModal">&times;</span>
+      <h3 id="modalTitle">发布新内容</h3>
+      <input type="text" id="pubName" placeholder="名称">
+      <input type="text" id="pubType" placeholder="类型/出处" style="display:none;">
+      <textarea id="pubCom" placeholder="评价/描述"></textarea>
+      <button id="submitBtn">提交发布</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
