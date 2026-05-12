@@ -1,12 +1,12 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4100/api";
 
-export async function analyzeAnimeList(animeList) {
-  const response = await fetch(`${API_BASE_URL}/analyze`, {
+async function postJson(path, body) {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ anime_list: animeList }),
+    body: JSON.stringify(body),
   });
 
   const payload = await response.json();
@@ -15,4 +15,8 @@ export async function analyzeAnimeList(animeList) {
   }
 
   return payload.data;
+}
+
+export function analyzeAnimeList(animeList) {
+  return postJson("/analyze", { anime_list: animeList });
 }

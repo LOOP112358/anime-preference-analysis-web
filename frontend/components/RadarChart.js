@@ -4,15 +4,14 @@ import dynamic from "next/dynamic";
 
 const ReactECharts = dynamic(() => import("echarts-for-react"), { ssr: false });
 
-const RADAR_KEYS = ["healing", "dark", "fantasy", "projection", "stimulation", "analytical", "emotional", "daily"];
-
-export default function RadarChart({ dimensions, dimensionLabels }) {
+export default function RadarChart({ dimensions, dimensionLabels, radarKeys }) {
+  const keys = radarKeys?.length ? radarKeys : Object.keys(dimensions || {});
   const option = {
     tooltip: { trigger: "item" },
     radar: {
       radius: "68%",
       splitNumber: 4,
-      indicator: RADAR_KEYS.map((key) => ({
+      indicator: keys.map((key) => ({
         name: dimensionLabels[key] || key,
         max: 1,
       })),
@@ -31,7 +30,7 @@ export default function RadarChart({ dimensions, dimensionLabels }) {
         type: "radar",
         data: [
           {
-            value: RADAR_KEYS.map((key) => Number(dimensions[key] || 0)),
+            value: keys.map((key) => Number(dimensions[key] || 0)),
             areaStyle: { color: "rgba(74, 184, 214, 0.28)" },
             lineStyle: { color: "#4ab8d6", width: 2 },
             itemStyle: { color: "#f26b5b" },

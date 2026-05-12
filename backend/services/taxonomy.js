@@ -3,6 +3,7 @@ export const NORMALIZATION_MAP = {
   阴暗: "黑暗",
   压抑: "黑暗",
   残酷: "黑暗",
+  悲剧: "黑暗",
   温馨: "治愈",
   温暖: "治愈",
   感动: "治愈",
@@ -26,6 +27,21 @@ export const NORMALIZATION_MAP = {
   家庭: "关系",
   心理: "代入",
   现实向: "现实",
+  音乐: "情感",
+  偶像: "关系",
+  舞台: "情感",
+  社会: "现实",
+  人性: "代入",
+  命运: "代入",
+  战争: "黑暗",
+  末世: "黑暗",
+  超能力: "刺激",
+  赛博朋克: "幻想",
+  机器人: "幻想",
+  百合: "情感",
+  少女: "关系",
+  男性主角: "个人",
+  女性主角: "关系",
 };
 
 export const TAG_DIMENSION_MAP = {
@@ -56,6 +72,16 @@ export const TAG_DIMENSION_MAP = {
   牺牲: { dark: 0.8, emotional: 0.8, relationship_focus: 0.3 },
   孤独: { individual_focus: 1.0, dark: 0.6, projection: 0.6 },
   自由: { individual_focus: 0.9, fantasy: 0.7, stimulation: 0.4 },
+  音乐: { emotional: 1.0, relationship_focus: 0.6, daily: 0.5 },
+  偶像: { relationship_focus: 0.9, emotional: 0.9, daily: 0.4 },
+  舞台: { emotional: 0.8, stimulation: 0.6, projection: 0.4 },
+  社会: { realism: 1.0, analytical: 0.7, dark: 0.3 },
+  人性: { projection: 0.8, analytical: 0.6, emotional: 0.5 },
+  末世: { dark: 1.0, fantasy: 0.5, stimulation: 0.5 },
+  超能力: { fantasy: 0.8, stimulation: 0.9, projection: 0.3 },
+  机器人: { fantasy: 0.8, analytical: 0.7, realism: 0.3 },
+  百合: { emotional: 1.0, relationship_focus: 1.0 },
+  少女: { relationship_focus: 0.8, emotional: 0.6, daily: 0.3 },
 };
 
 export const PERSONALITY_TYPES = [
