@@ -2,6 +2,7 @@ import dotenv from "dotenv";
 import express from "express";
 import cors from "cors";
 import analyzeRouter from "./routes/analyze.js";
+import recommendRouter from "./routes/recommend.js";
 
 dotenv.config();
 
@@ -31,7 +32,7 @@ app.get("/", (_req, res) => {
   res.json({
     success: true,
     service: "acg-personality-analyzer-backend",
-    message: "Use POST /api/analyze for analysis requests.",
+    message: "Use POST /api/analyze for analysis, POST /api/recommend for recommendations.",
   });
 });
 
@@ -44,6 +45,7 @@ app.get("/health", (_req, res) => {
 });
 
 app.use("/api/analyze", analyzeRouter);
+app.use("/api/recommend", recommendRouter);
 
 app.use((err, _req, res, _next) => {
   console.error(err);

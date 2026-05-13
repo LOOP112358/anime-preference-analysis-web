@@ -93,6 +93,70 @@ function parseBangumiSearchResult(html) {
   };
 }
 
+function parseBangumiSearchResults(html) {
+  const $ = cheerio.load(html);
+  const results = [];
+  $("ul#browserItemList li.item").each((_, element) => {
+    const link = $(element).find("h3 a").first();
+    const href = link.attr("href");
+    const title = compactText(link.text());
+    if (href && title) {
+      results.push({
+        href: href.startsWith("http") ? href : `https://bangumi.tv${href}`,
+        title,
+      });
+    }
+  });
+  return results;
+}
+
+function scoreSearchResult(resultTitle, requestedTitle) {
+  const r = normalizeTitle(resultTitle);
+  const q = normalizeTitle(requestedTitle);
+
+  if (r === q) return 100;
+  if (r.includes(q) || q.includes(r)) return 80;
+
+  const qChars = [...q].filter((c) => /[一-鿿぀-ゟ゠-ヿ]/.test(c));
+  if (qChars.length >= 2) {
+    let matched = 0;
+    for (const c of qChars) {
+      if (r.includes(c)) matched += 1;
+    }
+    if (matched >= qChars.length) return 70;
+    if (matched >= qChars.length * 0.7) return 50;
+  }
+
+  return 0;
+}
+
+function pickBestSearchResult(results, requestedTitle) {
+  if (results.length === 0) return null;
+
+  let best = results[0];
+  let bestScore = scoreSearchResult(best.title, requestedTitle);
+
+  for (let i = 1; i < results.length; i += 1) {
+    const s = scoreSearchResult(results[i].title, requestedTitle);
+    if (s > bestScore) {
+      bestScore = s;
+      best = results[i];
+    }
+  }
+
+  return { ...best, _matchScore: bestScore };
+}
+
+function normalizeTitle(title) {
+  return String(title || "").trim().toLowerCase();
+}
+
+export async function searchBangumi(keyword, maxResults = 10) {
+  const url = `https://bangumi.tv/subject_search/${encodeURIComponent(keyword)}?cat=2`;
+  const html = await fetchHtml(url);
+  return parseBangumiSearchResults(html).slice(0, maxResults);
+}
+
 function parseBangumiSubjectPage(html, requestedTitle) {
   const $ = cheerio.load(html);
   $("script, style, noscript").remove();
@@ -118,16 +182,18 @@ function parseBangumiSubjectPage(html, requestedTitle) {
 }
 
 async function scrapeBangumi(title) {
-  const searchUrl = `https://bangumi.tv/subject_search/${encodeURIComponent(title)}?cat=2`;
-  const searchHtml = await fetchHtml(searchUrl);
-  const searchResult = parseBangumiSearchResult(searchHtml);
-  if (!searchResult?.href) {
+  const url = `https://bangumi.tv/subject_search/${encodeURIComponent(title)}?cat=2`;
+  const html = await fetchHtml(url);
+  const allResults = parseBangumiSearchResults(html);
+  const best = pickBestSearchResult(allResults, title);
+
+  if (!best) {
     throw new Error(`No Bangumi search result found for ${title}`);
   }
 
-  const subjectUrl = searchResult.href.startsWith("http")
-    ? searchResult.href
-    : `https://bangumi.tv${searchResult.href}`;
+  const subjectUrl = best.href.startsWith("http")
+    ? best.href
+    : `https://bangumi.tv${best.href}`;
   const subjectHtml = await fetchHtml(subjectUrl);
   return parseBangumiSubjectPage(subjectHtml, title);
 }

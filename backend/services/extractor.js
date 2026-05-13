@@ -97,7 +97,7 @@ function inferTagsFromCategories(categories) {
   return matches;
 }
 
-export function extractFeatureVector(scrapedItems) {
+export function buildAggregatedTagScoresFromScrapedItems(scrapedItems) {
   const aggregated = {};
 
   for (const item of scrapedItems) {
@@ -131,11 +131,15 @@ export function extractFeatureVector(scrapedItems) {
     }
   }
 
-  const numericAggregated = Object.fromEntries(
+  return Object.fromEntries(
     Object.entries(aggregated)
       .map(([tag, value]) => [tag, Number(value)])
       .sort((a, b) => b[1] - a[1]),
   );
+}
+
+export function extractFeatureVector(scrapedItems) {
+  const numericAggregated = buildAggregatedTagScoresFromScrapedItems(scrapedItems);
 
   const wordCloud = Object.entries(numericAggregated)
     .slice(0, 40)
