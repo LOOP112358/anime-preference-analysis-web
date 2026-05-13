@@ -3,7 +3,7 @@
 import { useState, useCallback } from "react";
 
 const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4100/api";
+  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4000/api";
 
 const DIM_LABELS = {
   healing: "治愈",
