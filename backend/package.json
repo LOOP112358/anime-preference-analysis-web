@@ -6,7 +6,8 @@
   "main": "app.js",
   "scripts": {
     "dev": "node --watch app.js",
-    "start": "node app.js"
+    "start": "node app.js",
+    "build:feature-pool": "node scripts/build-feature-pool.mjs"
   },
   "dependencies": {
     "axios": "^1.9.0",
