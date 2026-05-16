@@ -136,7 +136,7 @@ function ModeButton({ mode, label, icon, current, onClick }) {
 
 function DimBar({ label, value, colorKey, animate }) {
   const rawPct = (value || 0) * 100;
-  const pct = Math.round(10 + rawPct * 0.55);
+  const pct = Math.round(rawPct * 0.1);
   const color = DIM_COLORS[colorKey] || "#5DCAA5";
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 9 }}>
