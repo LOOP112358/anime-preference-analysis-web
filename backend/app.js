@@ -1,8 +1,13 @@
 import dotenv from "dotenv";
 import express from "express";
 import cors from "cors";
+import { readFileSync, existsSync } from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import analyzeRouter from "./routes/analyze.js";
 import recommendRouter from "./routes/recommend.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 dotenv.config();
 
@@ -27,6 +32,22 @@ app.use(
   }),
 );
 app.use(express.json({ limit: "1mb" }));
+
+if (process.env.RECOMMEND_DEV_FIXTURES === "1") {
+  const mockUserListsPath = path.join(__dirname, "data", "mock-user-lists.json");
+  app.get("/api/dev/mock-user-lists", (_req, res) => {
+    if (!existsSync(mockUserListsPath)) {
+      res.status(404).json({ success: false, message: "data/mock-user-lists.json not found" });
+      return;
+    }
+    res.type("application/json").send(readFileSync(mockUserListsPath, "utf-8"));
+  });
+  console.log(
+    "[dev] GET /api/dev/mock-user-lists → set USER_LISTS_API_URL=http://localhost:" +
+      port +
+      "/api/dev/mock-user-lists for collaborative/hybrid tests",
+  );
+}
 
 app.get("/", (_req, res) => {
   res.json({

@@ -1,0 +1,25 @@
+{
+  "success": true,
+  "message": "本地推荐系统测试用：模拟「用户发帖」扁平行，后端会按 user_id 聚合成片单。",
+  "data": [
+    { "user_id": "fixture_alpha", "ani_name": "Clannad" },
+    { "user_id": "fixture_alpha", "ani_name": "Angel Beats!" },
+    { "user_id": "fixture_alpha", "ani_name": "Charlotte" },
+    { "user_id": "fixture_alpha", "ani_name": "可塑性记忆" },
+
+    { "user_id": "fixture_beta", "ani_name": "Clannad" },
+    { "user_id": "fixture_beta", "ani_name": "四月是你的谎言" },
+    { "user_id": "fixture_beta", "ani_name": "虫师" },
+    { "user_id": "fixture_beta", "ani_name": "夏目友人帐" },
+    { "user_id": "fixture_beta", "ani_name": "紫罗兰永恒花园" },
+
+    { "user_id": "fixture_gamma", "ani_name": "进击的巨人" },
+    { "user_id": "fixture_gamma", "ani_name": "Death Note" },
+    { "user_id": "fixture_gamma", "ani_name": "寄生兽" },
+
+    { "user_id": "fixture_delta", "ani_name": "Clannad" },
+    { "user_id": "fixture_delta", "ani_name": "轻音少女" },
+    { "user_id": "fixture_delta", "ani_name": "日常" },
+    { "user_id": "fixture_delta", "ani_name": "悠哉日常大王" }
+  ]
+}

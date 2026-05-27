@@ -39,8 +39,18 @@ npm run dev
 
 默认地址：
 
-- 前端: `http://localhost:3001`
-- 后端: `http://localhost:4100`
+- 前端: `http://localhost:3001`（首页人格分析 / 推荐）
+- 社区发布: `http://localhost:3001/community`
+- Node 分析后端: `http://localhost:4100`
+- Python 用户发布后端（可选）: `http://127.0.0.1:5000`
+
+社区发布需单独启动 Flask（见 `backend/user_post_backend/README.md`）：
+
+```bash
+cd backend/user_post_backend
+pip install -r requirements.txt
+python app.py
+```
 
 ## 环境变量
 
@@ -60,7 +70,7 @@ CORS_ORIGIN=http://localhost:3001
 
 ```bash
 NEXT_PUBLIC_API_BASE_URL=http://localhost:4100/api
-```
+NEXT_PUBLIC_POST_API_URL=http://127.0.0.1:5000
 ```
 
 ### 3) 人格分析接口（作品）

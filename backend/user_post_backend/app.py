@@ -1,23 +1,64 @@
+from pathlib import Path
+
+from dotenv import load_dotenv
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+import os
 import pymysql
 import requests
 
+load_dotenv(Path(__file__).resolve().parent / ".env")
+
 app = Flask(__name__)
-CORS(app)
+CORS(
+    app,
+    resources={
+        r"/*": {
+            "origins": [
+                "http://localhost:3001",
+                "http://127.0.0.1:3001",
+            ]
+        }
+    },
+)
 
 DEFAULT_IMG = "/static/default.jpg"
 
 
-def get_conn():#我的数据库是MySQL
-    return pymysql.connect(
-        host="localhost",
-        user="root",#这是默认数据库用户名，你可以改成你自己的用户名
-        password="你的数据库密码",
-        database="anime_web", #这是上传的数据库名称不用改动
-        charset="utf8mb4",
-        cursorclass=pymysql.cursors.DictCursor
-    )
+def get_db_config():
+    password = os.environ.get("MYSQL_PASSWORD", "").strip()
+    if not password or password == "你的数据库密码":
+        raise ValueError(
+            "未配置 MySQL 密码：请在 backend/user_post_backend 目录创建 .env，"
+            "写入 MYSQL_PASSWORD=你的root密码（可参考 .env.example）"
+        )
+    return {
+        "host": os.environ.get("MYSQL_HOST", "localhost"),
+        "user": os.environ.get("MYSQL_USER", "root"),
+        "password": password,
+        "database": os.environ.get("MYSQL_DATABASE", "anime_web"),
+        "charset": "utf8mb4",
+        "cursorclass": pymysql.cursors.DictCursor,
+    }
+
+
+def get_conn():
+    return pymysql.connect(**get_db_config())
+
+
+def db_error_message(exc):
+    if isinstance(exc, ValueError):
+        return str(exc)
+    if isinstance(exc, pymysql.err.OperationalError):
+        code = exc.args[0] if exc.args else 0
+        if code == 1045:
+            return "MySQL 密码错误：请检查 .env 里的 MYSQL_PASSWORD 是否与 Workbench 登录密码一致"
+        if code == 1049:
+            return "数据库 anime_web 不存在：请在 MySQL Workbench 执行 DB/ani.sql"
+        if code == 2003:
+            return "无法连接 MySQL：请先在「服务」里启动 MySQL80（或你的 MySQL 服务）"
+        return f"数据库连接失败：{exc.args[1] if len(exc.args) > 1 else exc}"
+    return str(exc)
 
 
 def ok(message="获取成功", data=None):
@@ -38,6 +79,16 @@ def fail(message="操作失败"):
 
 def get_data():
     return request.get_json(silent=True) or {}
+
+
+@app.route("/health", methods=["GET"])
+def health():
+    try:
+        conn = get_conn()
+        conn.close()
+        return ok("数据库连接正常")
+    except Exception as exc:
+        return fail(db_error_message(exc)), 503
 
 
 # 根据番剧名获取：封面 + 类型
@@ -156,8 +207,9 @@ def register():
     if not user_name or not password:
         return fail("用户名和密码不能为空")
 
-    conn = get_conn()
+    conn = None
     try:
+        conn = get_conn()
         with conn.cursor() as cur:
             sql = "INSERT INTO user(user_name, password) VALUES(%s, %s)"
             cur.execute(sql, (user_name, password))
@@ -165,11 +217,14 @@ def register():
 
         return ok("注册成功")
 
-    except Exception as e:
-        return fail("注册失败：" + str(e))
+    except pymysql.err.IntegrityError:
+        return fail("用户名已存在，请换一个或直接登录")
+    except Exception as exc:
+        return fail(db_error_message(exc))
 
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 
 # 用户登录
@@ -183,8 +238,9 @@ def login():
     if not user_name or not password:
         return fail("用户名和密码不能为空")
 
-    conn = get_conn()
+    conn = None
     try:
+        conn = get_conn()
         with conn.cursor() as cur:
             sql = """
             SELECT user_id, user_name, photo, user_intro, create_at
@@ -196,11 +252,14 @@ def login():
 
         if user:
             return ok("登录成功", user)
-        else:
-            return fail("用户名或密码错误")
+        return fail("用户名或密码错误")
+
+    except Exception as exc:
+        return fail(db_error_message(exc))
 
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 
 # 查看用户主页

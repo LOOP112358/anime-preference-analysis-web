@@ -20,3 +20,8 @@ async function postJson(path, body) {
 export function analyzeAnimeList(animeList) {
   return postJson("/analyze", { anime_list: animeList });
 }
+
+/** @param {{ mode?: string, anime_list: string[], limit?: number, min_overlap?: number, hybrid_alpha?: number }} body */
+export function recommendAnimeList(body) {
+  return postJson("/recommend", body);
+}

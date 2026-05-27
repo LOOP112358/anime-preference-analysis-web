@@ -11,7 +11,8 @@
     "dev:frontend": "npm run dev --workspace frontend",
     "dev:backend": "npm run dev --workspace backend",
     "build": "npm run build --workspace frontend",
-    "start": "concurrently \"npm run start --workspace frontend\" \"npm run start --workspace backend\""
+    "start": "concurrently \"npm run start --workspace frontend\" \"npm run start --workspace backend\"",
+    "test:recommend": "npm run test:recommend --workspace backend"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
