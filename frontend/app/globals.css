@@ -4,6 +4,8 @@
 
 :root {
   color-scheme: light;
+  --font-sans: var(--font-cloud-sans, "Noto Sans SC"), "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-display: var(--font-cloud-serif, "Noto Serif SC"), "Songti SC", "SimSun", serif;
   --sketch-ink: #2c2c2c;
   --sketch-muted: #6b6560;
   --sketch-paper: #fffef9;

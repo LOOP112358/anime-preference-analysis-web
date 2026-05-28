@@ -1,20 +1,42 @@
 import axios from "axios";
 import * as cheerio from "cheerio";
+import { HttpsProxyAgent } from "https-proxy-agent";
 
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 
 /** 单次 HTTP 超时（ms）。Bangumi 一次抓取含搜索页 + 条目页两次请求。 */
-const FETCH_TIMEOUT_MS = Number(process.env.SCRAPER_FETCH_TIMEOUT_MS || 22000);
+const FETCH_TIMEOUT_MS = Number(process.env.SCRAPER_FETCH_TIMEOUT_MS || 12000);
 
-async function fetchHtml(url) {
-  const response = await axios.get(url, {
+function formatScrapeError(reason) {
+  if (!reason) {
+    return "unknown error";
+  }
+  const status = reason.response?.status;
+  if (status) {
+    return `HTTP ${status}`;
+  }
+  return reason.message || reason.code || String(reason);
+}
+
+function getFetchAxiosConfig() {
+  const config = {
     timeout: FETCH_TIMEOUT_MS,
     headers: {
       "User-Agent": USER_AGENT,
       "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
     },
-  });
+  };
+  const proxyUrl = process.env.SCRAPER_HTTPS_PROXY || process.env.HTTPS_PROXY;
+  if (proxyUrl) {
+    config.httpsAgent = new HttpsProxyAgent(proxyUrl);
+    config.proxy = false;
+  }
+  return config;
+}
+
+async function fetchHtml(url) {
+  const response = await axios.get(url, getFetchAxiosConfig());
   return response.data;
 }
 
@@ -236,30 +258,35 @@ function mergeResults(title, results, errors) {
 
 export async function scrapeAnime(title) {
   const errors = [];
-  let bangumiResult = null;
+  const [bangumiSettled, wikiSettled] = await Promise.allSettled([
+    scrapeBangumi(title),
+    scrapeWikipedia(title),
+  ]);
 
-  try {
-    bangumiResult = await scrapeBangumi(title);
-  } catch (reason) {
-    errors.push(`bangumi: ${reason?.message || "unknown error"}`);
+  let bangumiResult = null;
+  if (bangumiSettled.status === "fulfilled") {
+    bangumiResult = bangumiSettled.value;
+  } else {
+    errors.push(`bangumi: ${formatScrapeError(bangumiSettled.reason)}`);
   }
 
-  if (bangumiResult && isMeaningfulResult(bangumiResult)) {
-    return mergeResults(title, [bangumiResult], errors);
+  let wikiResult = null;
+  if (wikiSettled.status === "fulfilled") {
+    wikiResult = wikiSettled.value;
+  } else {
+    errors.push(`wikipedia: ${formatScrapeError(wikiSettled.reason)}`);
+  }
+
+  const meaningful = [bangumiResult, wikiResult].filter(isMeaningfulResult);
+  if (meaningful.length > 0) {
+    return mergeResults(title, meaningful, errors);
   }
 
   if (bangumiResult && !isMeaningfulResult(bangumiResult)) {
     errors.push("bangumi: subject has no usable tags or summary");
   }
-
-  try {
-    const wikiResult = await scrapeWikipedia(title);
-    if (isMeaningfulResult(wikiResult)) {
-      return mergeResults(title, [wikiResult], errors);
-    }
+  if (wikiResult && !isMeaningfulResult(wikiResult)) {
     errors.push("wikipedia: page has no usable categories or intro text");
-  } catch (reason) {
-    errors.push(`wikipedia: ${reason?.message || "unknown error"}`);
   }
 
   return mergeResults(title, [], errors);

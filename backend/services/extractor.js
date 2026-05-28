@@ -101,8 +101,8 @@ export function buildAggregatedTagScoresFromScrapedItems(scrapedItems) {
   const aggregated = {};
 
   for (const item of scrapedItems) {
-    const normalizedMoeTags = item.moe_tags.map(normalizeTag).filter(Boolean);
-    const normalizedCategories = item.categories.map(normalizeTag).filter(Boolean);
+    const normalizedMoeTags = (item.moe_tags || []).map(normalizeTag).filter(Boolean);
+    const normalizedCategories = (item.categories || []).map(normalizeTag).filter(Boolean);
     const keywordMatches = extractRuleMatches(item.text || "", KEYWORD_RULES);
     const inferredCategoryTags = inferTagsFromCategories(normalizedCategories).map(normalizeTag);
 
@@ -139,7 +139,17 @@ export function buildAggregatedTagScoresFromScrapedItems(scrapedItems) {
 }
 
 export function extractFeatureVector(scrapedItems) {
-  const numericAggregated = buildAggregatedTagScoresFromScrapedItems(scrapedItems);
+  let numericAggregated = buildAggregatedTagScoresFromScrapedItems(scrapedItems);
+
+  if (Object.keys(numericAggregated).length === 0) {
+    const titleOnlyItems = scrapedItems.map((item) => ({
+      ...item,
+      moe_tags: item.moe_tags || [],
+      categories: item.categories || [],
+      text: item.title || "",
+    }));
+    numericAggregated = buildAggregatedTagScoresFromScrapedItems(titleOnlyItems);
+  }
 
   const wordCloud = Object.entries(numericAggregated)
     .slice(0, 40)

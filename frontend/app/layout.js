@@ -3,17 +3,18 @@ import "./globals.css";
 import AppNav from "../components/AppNav";
 import SiteBackground from "../components/SiteBackground";
 
-const sans = Noto_Sans_SC({
-  subsets: ["latin"],
+const notoSans = Noto_Sans_SC({
   weight: ["400", "500", "700"],
-  variable: "--font-sans",
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-cloud-sans",
 });
 
-const display = Noto_Serif_SC({
-  subsets: ["latin"],
+const notoSerif = Noto_Serif_SC({
   weight: ["400", "600", "700"],
-  variable: "--font-display",
+  subsets: ["latin"],
   display: "swap",
+  variable: "--font-cloud-serif",
 });
 
 export const metadata = {
@@ -23,8 +24,8 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="zh-CN" className={`${sans.variable} ${display.variable}`}>
-      <body className="font-sans antialiased text-ink">
+    <html lang="zh-CN" className={`${notoSans.variable} ${notoSerif.variable}`}>
+      <body className={`${notoSans.className} font-sans antialiased text-ink`}>
         <SiteBackground />
         <AppNav />
         {children}

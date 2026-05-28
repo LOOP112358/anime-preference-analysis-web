@@ -59,6 +59,17 @@ function parseInput(value) {
     .filter(Boolean);
 }
 
+function worksScrapeFailed(works) {
+  if (!works?.length) {
+    return false;
+  }
+  return works.every(
+    (work) =>
+      work.source === "unresolved" ||
+      /ETIMEDOUT|ECONNRESET|ENOTFOUND|timeout/i.test(work.error || ""),
+  );
+}
+
 function WorksPanel({ items }) {
   if (!items?.length) {
     return null;
@@ -112,6 +123,7 @@ export default function AnalyzerClient() {
   const [recError, setRecError] = useState("");
 
   const parsedItems = useMemo(() => parseInput(input), [input]);
+  const scrapeFailed = useMemo(() => worksScrapeFailed(result?.works), [result?.works]);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -208,13 +220,21 @@ export default function AnalyzerClient() {
               </label>
               <div className="flex flex-wrap items-center gap-3">
                 <button type="submit" disabled={loading} className={btnPrimaryClass}>
-                  {loading ? "分析中..." : CONFIG.cta}
+                  {loading ? "分析中（抓取数据源）..." : CONFIG.cta}
                 </button>
                 <div className="text-sm text-stone-500">
                   {CONFIG.payloadLabel} {parsedItems.length} 个，要求 3 到 9 个。
+                  {loading ? " 首次约 20–60 秒，取决于网络。" : null}
                 </div>
               </div>
               {error ? <p className="text-sm text-red-600">{error}</p> : null}
+              {scrapeFailed ? (
+                <p className="text-sm leading-6 text-amber-800">
+                  Bangumi / 维基连接超时（ETIMEDOUT）。分析结果仅基于片名推断，准确度有限。若使用代理，请在{" "}
+                  <code className="text-xs">backend/.env</code> 设置{" "}
+                  <code className="text-xs">SCRAPER_HTTPS_PROXY=http://127.0.0.1:7890</code> 后重启后端。
+                </p>
+              ) : null}
             </form>
           ) : (
             <form className="mt-8 space-y-4" onSubmit={handleRecommendSubmit}>
@@ -395,7 +415,11 @@ export default function AnalyzerClient() {
                 <h2 className="font-display text-xl text-stone-800">偏好词云</h2>
                 <span className="text-sm text-stone-500">聚合标签权重</span>
               </div>
-              <WordCloudPanel data={result?.feature_cloud || []} fallbackData={CONFIG.cloudFallback} />
+              <WordCloudPanel
+                data={result?.feature_cloud || []}
+                fallbackData={CONFIG.cloudFallback}
+                scrapeFailed={scrapeFailed}
+              />
             </div>
             <div className={panelClass}>
               <div className="flex items-center justify-between">
