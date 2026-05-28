@@ -5,6 +5,7 @@ on:
     branches:
       - main  # 👈 如果您的 GitHub 主分支叫 master，请修改为 master
 
+# 防止多人同时提交导致服务器部署冲突
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -13,9 +14,11 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      # 1. 拉取最新的 GitHub 代码
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      # 2. 将代码增量同步到阿里云服务器（排除敏感和无用文件）
       - name: Sync Files to Server
         uses: easingthemes/ssh-deploy@main
         env:
@@ -23,22 +26,12 @@ jobs:
           REMOTE_HOST: ${{ secrets.SERVER_IP }}
           REMOTE_USER: ${{ secrets.SERVER_USER }}
           REMOTE_PORT: ${{ secrets.SERVER_PORT }}
-          TARGET: "/opt/anime-app"
+          TARGET: "/opt/anime-app"  # 服务器上您的项目路径
           ARGS: "-rlgoDzvO"
-          # 排除大文件夹和敏感配置，确保不覆盖服务器上的 .env 和 .env.local
-          EXCLUDE: |
-            /node_modules/
-            /frontend/node_modules/
-            /frontend/.next/
-            /backend/node_modules/
-            /backend/user_post_backend/venv/
-            /backend/user_post_backend/__pycache__/
-            .git/
-            .github/
-            .env
-            .env.local
-            .env.example
+          # 👈 修复：改为单行逗号分隔格式，防止被系统误执行
+          EXCLUDE: "/node_modules/, /frontend/node_modules/, /frontend/.next/, /backend/node_modules/, /backend/user_post_backend/venv/, /backend/user_post_backend/__pycache__/, .git/, .github/, .env, .env.local, .env.example"
 
+      # 3. 登录服务器自动执行后续操作（更新依赖、打包并用 PM2 启动）
       - name: SSH Command Run (Build & Restart)
         uses: appleboy/ssh-action@master
         with:
@@ -57,16 +50,13 @@ jobs:
             echo "====== Deploying Node Backend ======"
             cd /opt/anime-app/backend
             npm install --production
-            # 使用 PM2 守护进程：如果存在则重启，不存在则首次启动
             pm2 describe acg-node-backend > /dev/null 2>&1 && pm2 restart acg-node-backend || pm2 start app.js --name "acg-node-backend"
 
             # 3. 部署 Python/Flask 社区发布后端 (Port: 5000)
             echo "====== Deploying Python Backend ======"
             cd /opt/anime-app/backend/user_post_backend
-            # 如果存在本地虚拟环境 venv 则激活，否则直接使用系统环境
             if [ -d "venv" ]; then
               source venv/bin/activate
-              # 使用虚拟环境的 Python 解析器启动 PM2
               pm2 describe acg-py-backend > /dev/null 2>&1 && pm2 restart acg-py-backend || pm2 start app.py --name "acg-py-backend" --interpreter ./venv/bin/python
             else
               pip install -r requirements.txt
@@ -77,9 +67,7 @@ jobs:
             echo "====== Deploying Next.js Frontend ======"
             cd /opt/anime-app/frontend
             npm install
-            npm run build  # 编译打包 Next.js
-            # 用 PM2 运行 Next.js 并指定端口为 3001
+            npm run build
             pm2 describe acg-frontend > /dev/null 2>&1 && pm2 restart acg-frontend || pm2 start npm --name "acg-frontend" -- run start -- -p 3001
 
-            # 保存 PM2 当前状态，确保服务器重启后自动恢复
             pm2 save
