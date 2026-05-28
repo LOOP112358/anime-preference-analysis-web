@@ -415,11 +415,7 @@ export default function AnalyzerClient() {
                 <h2 className="font-display text-xl text-stone-800">偏好词云</h2>
                 <span className="text-sm text-stone-500">聚合标签权重</span>
               </div>
-              <WordCloudPanel
-                data={result?.feature_cloud || []}
-                fallbackData={CONFIG.cloudFallback}
-                scrapeFailed={scrapeFailed}
-              />
+              <WordCloudPanel data={result?.feature_cloud || []} fallbackData={CONFIG.cloudFallback} />
             </div>
             <div className={panelClass}>
               <div className="flex items-center justify-between">
