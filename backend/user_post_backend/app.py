@@ -524,7 +524,7 @@ def anime_list():
             conn.close()
 
 
-# 修改番剧：支持修改番剧名、图片、类型、评价
+# 修改番剧：支持修改番剧名、图片、类型、评价，也支持 reset_img 恢复抓取图片
 @app.route("/anime/update", methods=["POST"])
 def update_anime():
     data = get_data()
@@ -535,6 +535,7 @@ def update_anime():
     ani_img = data.get("ani_img")
     ani_type = data.get("ani_type")
     ani_com = data.get("ani_com")
+    reset_img = data.get("reset_img")
 
     if not ani_id or not user_id:
         return fail("番剧ID和用户ID不能为空")
@@ -558,7 +559,10 @@ def update_anime():
             if not ani_name:
                 ani_name = old["ani_name"]
 
-            if not ani_img:
+            if reset_img:
+                anime_info = get_anime_info(ani_name)
+                ani_img = anime_info["ani_img"]
+            elif not ani_img:
                 ani_img = old["ani_img"]
 
             if not ani_type:
@@ -716,7 +720,7 @@ def character_list():
             conn.close()
 
 
-# 修改角色：支持修改角色名、出处、图片、评价
+# 修改角色：支持修改角色名、出处、图片、评价，也支持 reset_img 恢复抓取图片
 @app.route("/character/update", methods=["POST"])
 def update_character():
     data = get_data()
@@ -727,6 +731,7 @@ def update_character():
     char_from = data.get("char_from")
     char_img = data.get("char_img")
     char_com = data.get("char_com")
+    reset_img = data.get("reset_img")
 
     if not char_id or not user_id:
         return fail("角色ID和用户ID不能为空")
@@ -753,7 +758,9 @@ def update_character():
             if not char_from:
                 char_from = old["char_from"]
 
-            if not char_img:
+            if reset_img:
+                char_img = find_character_image(char_name)
+            elif not char_img:
                 char_img = old["char_img"]
 
             if char_com is None:
