@@ -1,15 +1,19 @@
 from pathlib import Path
+from uuid import uuid4
 
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from werkzeug.utils import secure_filename
 import os
 import pymysql
 import requests
 
-load_dotenv(Path(__file__).resolve().parent / ".env")
+BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(BASE_DIR / ".env")
 
 app = Flask(__name__)
+
 CORS(
     app,
     resources={
@@ -24,6 +28,20 @@ CORS(
 
 DEFAULT_IMG = "/static/default.jpg"
 
+# 图片统一上传到 backend/user_post_backend/static/
+UPLOAD_FOLDER = BASE_DIR / "static"
+UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
+
+ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
+
+
+def allowed_image(filename):
+    if "." not in filename:
+        return False
+
+    ext = filename.rsplit(".", 1)[1].lower()
+    return ext in ALLOWED_IMAGE_EXTENSIONS
+
 
 def get_db_config():
     password = os.environ.get("MYSQL_PASSWORD", "").strip()
@@ -32,6 +50,7 @@ def get_db_config():
             "未配置 MySQL 密码：请在 backend/user_post_backend 目录创建 .env，"
             "写入 MYSQL_PASSWORD=你的root密码（可参考 .env.example）"
         )
+
     return {
         "host": os.environ.get("MYSQL_HOST", "localhost"),
         "user": os.environ.get("MYSQL_USER", "root"),
@@ -49,15 +68,21 @@ def get_conn():
 def db_error_message(exc):
     if isinstance(exc, ValueError):
         return str(exc)
+
     if isinstance(exc, pymysql.err.OperationalError):
         code = exc.args[0] if exc.args else 0
+
         if code == 1045:
             return "MySQL 密码错误：请检查 .env 里的 MYSQL_PASSWORD 是否与 Workbench 登录密码一致"
+
         if code == 1049:
             return "数据库 anime_web 不存在：请在 MySQL Workbench 执行 DB/ani.sql"
+
         if code == 2003:
             return "无法连接 MySQL：请先在「服务」里启动 MySQL80（或你的 MySQL 服务）"
+
         return f"数据库连接失败：{exc.args[1] if len(exc.args) > 1 else exc}"
+
     return str(exc)
 
 
@@ -89,6 +114,35 @@ def health():
         return ok("数据库连接正常")
     except Exception as exc:
         return fail(db_error_message(exc)), 503
+
+
+# 上传图片：用户头像、番剧图片、角色图片都用这个接口
+@app.route("/upload/image", methods=["POST"])
+def upload_image():
+    if "file" not in request.files:
+        return fail("没有接收到图片文件，请使用 file 字段上传")
+
+    file = request.files["file"]
+
+    if file.filename == "":
+        return fail("文件名不能为空")
+
+    if not allowed_image(file.filename):
+        return fail("图片格式不支持，只能上传 png、jpg、jpeg、gif、webp")
+
+    old_filename = secure_filename(file.filename)
+    ext = old_filename.rsplit(".", 1)[1].lower()
+    new_filename = f"{uuid4().hex}.{ext}"
+
+    save_path = UPLOAD_FOLDER / new_filename
+    file.save(save_path)
+
+    # 数据库里建议保存这个路径
+    img_url = f"/static/{new_filename}"
+
+    return ok("图片上传成功", {
+        "url": img_url
+    })
 
 
 # 根据番剧名获取：封面 + 类型
@@ -208,10 +262,14 @@ def register():
         return fail("用户名和密码不能为空")
 
     conn = None
+
     try:
         conn = get_conn()
         with conn.cursor() as cur:
-            sql = "INSERT INTO user(user_name, password) VALUES(%s, %s)"
+            sql = """
+            INSERT INTO user(user_name, password)
+            VALUES(%s, %s)
+            """
             cur.execute(sql, (user_name, password))
             conn.commit()
 
@@ -219,6 +277,7 @@ def register():
 
     except pymysql.err.IntegrityError:
         return fail("用户名已存在，请换一个或直接登录")
+
     except Exception as exc:
         return fail(db_error_message(exc))
 
@@ -239,6 +298,7 @@ def login():
         return fail("用户名和密码不能为空")
 
     conn = None
+
     try:
         conn = get_conn()
         with conn.cursor() as cur:
@@ -252,6 +312,7 @@ def login():
 
         if user:
             return ok("登录成功", user)
+
         return fail("用户名或密码错误")
 
     except Exception as exc:
@@ -265,8 +326,10 @@ def login():
 # 查看用户主页
 @app.route("/user/<int:user_id>", methods=["GET"])
 def get_user(user_id):
-    conn = get_conn()
+    conn = None
+
     try:
+        conn = get_conn()
         with conn.cursor() as cur:
             sql = """
             SELECT 
@@ -288,11 +351,89 @@ def get_user(user_id):
 
         if user:
             return ok("获取成功", user)
-        else:
-            return fail("用户不存在")
+
+        return fail("用户不存在")
+
+    except Exception as exc:
+        return fail(db_error_message(exc))
 
     finally:
-        conn.close()
+        if conn:
+            conn.close()
+
+
+# 修改个人信息：用户名、密码、头像、简介
+@app.route("/user/update", methods=["POST"])
+def update_user():
+    data = get_data()
+
+    user_id = data.get("user_id")
+    user_name = data.get("user_name")
+    password = data.get("password")
+    photo = data.get("photo")
+    user_intro = data.get("user_intro")
+
+    if not user_id:
+        return fail("用户ID不能为空")
+
+    conn = None
+
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            sql = """
+            SELECT user_id, user_name, password, photo, user_intro, create_at
+            FROM user
+            WHERE user_id=%s
+            """
+            cur.execute(sql, (user_id,))
+            old_user = cur.fetchone()
+
+            if not old_user:
+                return fail("用户不存在")
+
+            if not user_name:
+                user_name = old_user["user_name"]
+
+            if not password:
+                password = old_user["password"]
+
+            if not photo:
+                photo = old_user["photo"]
+
+            if user_intro is None:
+                user_intro = old_user["user_intro"]
+
+            sql = """
+            UPDATE user
+            SET user_name=%s,
+                password=%s,
+                photo=%s,
+                user_intro=%s
+            WHERE user_id=%s
+            """
+            cur.execute(sql, (user_name, password, photo, user_intro, user_id))
+            conn.commit()
+
+            sql = """
+            SELECT user_id, user_name, photo, user_intro, create_at
+            FROM user
+            WHERE user_id=%s
+            """
+            cur.execute(sql, (user_id,))
+            new_user = cur.fetchone()
+
+        return ok("个人信息修改成功", new_user)
+
+    except pymysql.err.IntegrityError:
+        return fail("用户名已存在，请换一个用户名")
+
+    except Exception as exc:
+        return fail(db_error_message(exc))
+
+    finally:
+        if conn:
+            conn.close()
 
 
 # 发布番剧
@@ -317,8 +458,10 @@ def add_anime():
     if not ani_type:
         ani_type = anime_info["ani_type"]
 
-    conn = get_conn()
+    conn = None
+
     try:
+        conn = get_conn()
         with conn.cursor() as cur:
             sql = """
             INSERT INTO anime_post(user_id, ani_name, ani_img, ani_type, ani_com)
@@ -330,21 +473,28 @@ def add_anime():
         return ok("番剧发布成功", {
             "ani_name": ani_name,
             "ani_img": ani_img,
-            "ani_type": ani_type
+            "ani_type": ani_type,
+            "ani_com": ani_com
         })
+
+    except pymysql.err.IntegrityError:
+        return fail("你已经发布过这个番剧了，不能重复发布")
 
     except Exception as e:
         return fail("番剧发布失败：" + str(e))
 
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 
 # 番剧列表
 @app.route("/anime/list", methods=["GET"])
 def anime_list():
-    conn = get_conn()
+    conn = None
+
     try:
+        conn = get_conn()
         with conn.cursor() as cur:
             sql = """
             SELECT 
@@ -366,11 +516,15 @@ def anime_list():
 
         return ok("获取成功", rows)
 
+    except Exception as exc:
+        return fail(db_error_message(exc))
+
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 
-# 修改番剧
+# 修改番剧：支持修改番剧名、图片、类型、评价
 @app.route("/anime/update", methods=["POST"])
 def update_anime():
     data = get_data()
@@ -385,10 +539,11 @@ def update_anime():
     if not ani_id or not user_id:
         return fail("番剧ID和用户ID不能为空")
 
-    conn = get_conn()
+    conn = None
+
     try:
+        conn = get_conn()
         with conn.cursor() as cur:
-            # 先查出原来的卡片
             sql = """
             SELECT ani_name, ani_img, ani_type, ani_com
             FROM anime_post
@@ -400,7 +555,6 @@ def update_anime():
             if not old:
                 return fail("修改失败，可能不是你的番剧卡片")
 
-            # 没传哪个字段，就保留原来的
             if not ani_name:
                 ani_name = old["ani_name"]
 
@@ -432,11 +586,15 @@ def update_anime():
             "ani_com": ani_com
         })
 
+    except pymysql.err.IntegrityError:
+        return fail("修改失败：你已经有同名番剧卡片了")
+
     except Exception as e:
         return fail("番剧修改失败：" + str(e))
 
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 
 # 删除番剧
@@ -450,8 +608,10 @@ def delete_anime():
     if not ani_id or not user_id:
         return fail("番剧ID和用户ID不能为空")
 
-    conn = get_conn()
+    conn = None
+
     try:
+        conn = get_conn()
         with conn.cursor() as cur:
             sql = """
             DELETE FROM anime_post
@@ -469,7 +629,8 @@ def delete_anime():
         return fail("番剧删除失败：" + str(e))
 
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 
 # 发布角色
@@ -489,8 +650,10 @@ def add_character():
     if not char_img:
         char_img = find_character_image(char_name)
 
-    conn = get_conn()
+    conn = None
+
     try:
+        conn = get_conn()
         with conn.cursor() as cur:
             sql = """
             INSERT INTO character_post(user_id, char_name, char_from, char_img, char_com)
@@ -501,21 +664,29 @@ def add_character():
 
         return ok("角色发布成功", {
             "char_name": char_name,
-            "char_img": char_img
+            "char_from": char_from,
+            "char_img": char_img,
+            "char_com": char_com
         })
+
+    except pymysql.err.IntegrityError:
+        return fail("你已经发布过这个角色了，不能重复发布")
 
     except Exception as e:
         return fail("角色发布失败：" + str(e))
 
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 
 # 角色列表
 @app.route("/character/list", methods=["GET"])
 def character_list():
-    conn = get_conn()
+    conn = None
+
     try:
+        conn = get_conn()
         with conn.cursor() as cur:
             sql = """
             SELECT 
@@ -537,11 +708,15 @@ def character_list():
 
         return ok("获取成功", rows)
 
+    except Exception as exc:
+        return fail(db_error_message(exc))
+
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 
-# 修改角色
+# 修改角色：支持修改角色名、出处、图片、评价
 @app.route("/character/update", methods=["POST"])
 def update_character():
     data = get_data()
@@ -556,10 +731,11 @@ def update_character():
     if not char_id or not user_id:
         return fail("角色ID和用户ID不能为空")
 
-    conn = get_conn()
+    conn = None
+
     try:
+        conn = get_conn()
         with conn.cursor() as cur:
-            # 先查出原来的卡片
             sql = """
             SELECT char_name, char_from, char_img, char_com
             FROM character_post
@@ -571,7 +747,6 @@ def update_character():
             if not old:
                 return fail("修改失败，可能不是你的角色卡片")
 
-            # 没传哪个字段，就保留原来的
             if not char_name:
                 char_name = old["char_name"]
 
@@ -603,11 +778,15 @@ def update_character():
             "char_com": char_com
         })
 
+    except pymysql.err.IntegrityError:
+        return fail("修改失败：你已经有同名角色卡片了")
+
     except Exception as e:
         return fail("角色修改失败：" + str(e))
 
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 
 # 删除角色
@@ -621,8 +800,10 @@ def delete_character():
     if not char_id or not user_id:
         return fail("角色ID和用户ID不能为空")
 
-    conn = get_conn()
+    conn = None
+
     try:
+        conn = get_conn()
         with conn.cursor() as cur:
             sql = """
             DELETE FROM character_post
@@ -640,14 +821,17 @@ def delete_character():
         return fail("角色删除失败：" + str(e))
 
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 
 # 查看某个用户发布的番剧
 @app.route("/user/<int:user_id>/anime", methods=["GET"])
 def user_anime_list(user_id):
-    conn = get_conn()
+    conn = None
+
     try:
+        conn = get_conn()
         with conn.cursor() as cur:
             sql = """
             SELECT 
@@ -670,15 +854,21 @@ def user_anime_list(user_id):
 
         return ok("获取成功", rows)
 
+    except Exception as exc:
+        return fail(db_error_message(exc))
+
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 
 # 查看某个用户发布的角色
 @app.route("/user/<int:user_id>/character", methods=["GET"])
 def user_character_list(user_id):
-    conn = get_conn()
+    conn = None
+
     try:
+        conn = get_conn()
         with conn.cursor() as cur:
             sql = """
             SELECT 
@@ -701,8 +891,12 @@ def user_character_list(user_id):
 
         return ok("获取成功", rows)
 
+    except Exception as exc:
+        return fail(db_error_message(exc))
+
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 
 if __name__ == "__main__":
