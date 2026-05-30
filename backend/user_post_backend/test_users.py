@@ -2,7 +2,7 @@ import time
 import requests
 from io import BytesIO
 
-BASE_URL = "http://47.86.228.151:5000"
+BASE_URL = "http://127.0.0.1:5000"
 
 USERS = [
     {
