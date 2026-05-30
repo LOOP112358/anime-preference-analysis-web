@@ -31,24 +31,43 @@ const CONFIG = {
     healing: "治愈",
     dark: "黑暗",
     passion: "热血",
+    suspense: "悬疑",
     fantasy: "幻想",
     realism: "现实",
-    projection: "代入",
-    escape: "逃避",
-    stimulation: "刺激",
-    analytical: "理性",
-    emotional: "感性",
-    relationship_focus: "关系",
-    individual_focus: "个人",
-    plot_complex: "复杂剧情",
     daily: "日常",
+    emotion: "感性",
+    bond: "关系",
+    growth: "成长",
+    logic: "理性",
+    narrative: "叙事",
+    humor: "幽默",
+    music: "音乐",
   },
-  radarKeys: ["healing", "dark", "fantasy", "projection", "stimulation", "analytical", "emotional", "daily"],
+  radarKeys: [
+    "healing",
+    "fantasy",
+    "emotion",
+    "bond",
+    "daily",
+    "growth",
+    "realism",
+    "dark",
+    "passion",
+    "suspense",
+    "logic",
+    "narrative",
+  ],
   cloudFallback: [
-    { name: "治愈", value: 10 },
+    { name: "治愈", value: 12 },
+    { name: "幻想", value: 10 },
+    { name: "关系", value: 9 },
     { name: "黑暗", value: 8 },
-    { name: "关系", value: 7 },
-    { name: "幻想", value: 6 },
+    { name: "热血", value: 7 },
+    { name: "日常", value: 6 },
+    { name: "音乐", value: 5 },
+    { name: "校园", value: 5 },
+    { name: "成长", value: 4 },
+    { name: "情感", value: 4 },
   ],
 };
 
@@ -419,13 +438,13 @@ export default function AnalyzerClient() {
             </div>
             <div className={panelClass}>
               <div className="flex items-center justify-between">
-                <h2 className="font-display text-xl text-stone-800">人格维度雷达图</h2>
+                <h2 className="font-display text-xl text-stone-800">偏好维度雷达图</h2>
                 <span className="text-sm text-stone-500">归一化分数</span>
               </div>
               <RadarChart
                 dimensions={result?.dimensions || {}}
                 dimensionLabels={CONFIG.dimLabels}
-                radarKeys={CONFIG.radarKeys}
+                radarKeys={result?.radar_keys || CONFIG.radarKeys}
               />
             </div>
           </section>

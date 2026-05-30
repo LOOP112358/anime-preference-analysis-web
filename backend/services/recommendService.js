@@ -7,6 +7,7 @@ import {
   cosineSimilarity,
   dimensionLabelSnapshot,
   dimensionVectorToArray,
+  migratePoolItemDimensions,
   rawDimensionVectorFromAggregatedTags,
 } from "./contentVector.js";
 import { DIMENSION_KEYS } from "./taxonomy.js";
@@ -30,7 +31,7 @@ function loadFeaturePool() {
   }
 
   const raw = JSON.parse(readFileSync(POOL_PATH, "utf-8"));
-  _poolCache = raw.items || [];
+  _poolCache = (raw.items || []).map(migratePoolItemDimensions);
   _poolIndex = new Map();
 
   for (const item of _poolCache) {
@@ -112,7 +113,7 @@ export async function runContentRecommend({ anime_list: sourceTitles, limit = 10
     const key = normalizeTitle(item.query_title);
     if (excludeSet.has(key)) continue;
 
-    const similarity = cosineSimilarity(profile.vector, item.vector_14);
+    const similarity = cosineSimilarity(profile.vector, item.vector);
     if (similarity <= 0) continue;
 
     scored.push({
@@ -120,7 +121,7 @@ export async function runContentRecommend({ anime_list: sourceTitles, limit = 10
       score: Number(similarity.toFixed(4)),
       cosine_similarity: Number(similarity.toFixed(4)),
       source: item.source,
-      dimensions_14: item.dimensions_14,
+      dimensions: item.dimensions,
     });
   }
 
@@ -140,7 +141,7 @@ export async function runContentRecommend({ anime_list: sourceTitles, limit = 10
     mode: "content",
     profile: {
       source_titles: sources,
-      dimensions_14: profile.dimension_snapshot,
+      dimensions: profile.dimension_snapshot,
       aggregated_tags: profile.aggregated_tags,
       dimension_keys: [...DIMENSION_KEYS],
     },

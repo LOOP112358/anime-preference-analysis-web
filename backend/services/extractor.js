@@ -1,4 +1,6 @@
-import { NORMALIZATION_MAP, TAG_DIMENSION_MAP } from "./taxonomy.js";
+import { NORMALIZATION_MAP, TAG_DIMENSION_MAP, DIMENSION_LABELS } from "./taxonomy.js";
+
+export { DIMENSION_LABELS };
 
 const SOURCE_WEIGHTS = {
   moe_tags: 2.0,
@@ -47,9 +49,8 @@ const CATEGORY_RULES = [
   { pattern: /音乐|偶像|歌剧|舞台/u, tag: "音乐" },
   { pattern: /家庭|友情|伙伴|少女/u, tag: "关系" },
   { pattern: /校园|学园/u, tag: "校园" },
-  { pattern: /日常|喜剧|搞笑/u, tag: "日常" },
-  { pattern: /群像|多主角/u, tag: "关系" },
-  { pattern: /复杂|多线|反转/u, tag: "复杂剧情" },
+  { pattern: /日常|喜剧|搞笑/u, tag: "幽默" },
+  { pattern: /复杂|多线|反转/u, tag: "叙事" },
 ];
 
 function normalizeTag(tag) {
@@ -138,6 +139,73 @@ export function buildAggregatedTagScoresFromScrapedItems(scrapedItems) {
   );
 }
 
+function isDisplayableTag(tag) {
+  const text = String(tag || "").trim();
+  return text.length >= 1 && text.length <= 14;
+}
+
+/** 抓取到的原始标签 / 分类 / 简介关键词，用于词云（不限于人格映射表） */
+export function buildRawWordScores(scrapedItems) {
+  const raw = {};
+
+  for (const item of scrapedItems) {
+    for (const tag of item.moe_tags || []) {
+      const normalized = normalizeTag(tag);
+      if (isDisplayableTag(normalized)) {
+        addScore(raw, normalized, SOURCE_WEIGHTS.moe_tags);
+      }
+    }
+
+    for (const category of (item.categories || []).slice(0, 16)) {
+      const normalized = normalizeTag(category);
+      if (isDisplayableTag(normalized)) {
+        addScore(raw, normalized, SOURCE_WEIGHTS.categories * 0.85);
+      }
+    }
+
+    extractRuleMatches(item.text || "", KEYWORD_RULES).forEach(({ tag, score }) => {
+      const normalized = normalizeTag(tag);
+      if (isDisplayableTag(normalized)) {
+        addScore(raw, normalized, score * SOURCE_WEIGHTS.keywords);
+      }
+    });
+  }
+
+  return raw;
+}
+
+/**
+ * 合并：原始抓取标签 + 归一化特征 + 维度得分 Top N
+ */
+export function buildEnrichedWordCloud(scrapedItems, aggregatedFeatures, dimensions, options = {}) {
+  const { maxWords = 80, topDimensions = 6 } = options;
+  const merged = buildRawWordScores(scrapedItems);
+
+  for (const [tag, value] of Object.entries(aggregatedFeatures || {})) {
+    if (isDisplayableTag(tag)) {
+      merged[tag] = Math.max(merged[tag] || 0, value * 1.15);
+    }
+  }
+
+  const peakTag = Math.max(...Object.values(merged), 1);
+  const topDimEntries = Object.entries(dimensions || {})
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, topDimensions);
+
+  for (const [key, score] of topDimEntries) {
+    const label = DIMENSION_LABELS[key];
+    if (label && Number.isFinite(score) && score > 0) {
+      merged[label] = Math.max(merged[label] || 0, peakTag * score * 1.2 + 2);
+    }
+  }
+
+  return Object.entries(merged)
+    .filter(([name]) => isDisplayableTag(name))
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, maxWords)
+    .map(([name, value]) => ({ name, value: Number(value.toFixed(2)) }));
+}
+
 export function extractFeatureVector(scrapedItems) {
   let numericAggregated = buildAggregatedTagScoresFromScrapedItems(scrapedItems);
 
@@ -152,7 +220,7 @@ export function extractFeatureVector(scrapedItems) {
   }
 
   const wordCloud = Object.entries(numericAggregated)
-    .slice(0, 40)
+    .slice(0, 60)
     .map(([name, value]) => ({ name, value: Number(value.toFixed(2)) }));
 
   return {

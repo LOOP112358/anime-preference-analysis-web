@@ -469,6 +469,8 @@ async function main() {
         source: item.source,
         dimensions_14: dims,
         vector_14: vec.map((v) => Number(v.toFixed(6))),
+        dimensions: dims,
+        vector: vec.map((v) => Number(v.toFixed(6))),
         tags_top: tagsTop,
       });
       console.log(`[${i + 1}/${queries.length}] ${item.title}  OK`);
@@ -479,7 +481,7 @@ async function main() {
   }
 
   const payload = {
-    schema_version: 1,
+    schema_version: 3,
     generated_at: new Date().toISOString(),
     dimension_keys: [...DIMENSION_KEYS],
     item_count: items.length,

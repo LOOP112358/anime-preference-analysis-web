@@ -1,6 +1,6 @@
 import express from "express";
 import { scrapeAnimeBundle } from "../services/scraper.js";
-import { extractFeatureVector } from "../services/extractor.js";
+import { extractFeatureVector, buildEnrichedWordCloud } from "../services/extractor.js";
 import { analyzePersonality } from "../services/personalityEngine.js";
 import { generateAnalysis } from "../services/llmService.js";
 
@@ -26,6 +26,11 @@ router.post("/", async (req, res, next) => {
     const scrapedItems = await scrapeAnimeBundle(animeList);
     const featureResult = extractFeatureVector(scrapedItems);
     const personalityResult = analyzePersonality(featureResult.aggregatedFeatures);
+    const featureCloud = buildEnrichedWordCloud(
+      scrapedItems,
+      featureResult.aggregatedFeatures,
+      personalityResult.dimensions,
+    );
     const llmResult = await generateAnalysis({
       primaryType: personalityResult.primary_type,
       secondaryType: personalityResult.secondary_type,
@@ -40,7 +45,7 @@ router.post("/", async (req, res, next) => {
         ...personalityResult,
         analysis: llmResult.analysis,
         works: scrapedItems,
-        feature_cloud: featureResult.wordCloud,
+        feature_cloud: featureCloud,
         aggregated_features: featureResult.aggregatedFeatures,
       },
     });
