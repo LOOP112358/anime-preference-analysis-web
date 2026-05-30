@@ -1,5 +1,5 @@
 import { DIMENSION_KEYS, DIMENSION_LABELS, PERSONALITY_TYPES, TAG_DIMENSION_MAP, resolveDimensionKey } from "./taxonomy.js";
-import { createEmptyDimensionRecord } from "./contentVector.js";
+import { createEmptyDimensionRecord, normalizeDimensionRecord } from "./contentVector.js";
 
 /** 各人格类型的完整维度轮廓（用于雷达图补全，避免大量为 0） */
 const PERSONALITY_DIMENSION_PROFILES = {
@@ -103,10 +103,45 @@ function createDimensionState() {
 }
 
 function normalizeDimensions(dimensions) {
-  const maxScore = Math.max(...Object.values(dimensions), 1);
+  const maxScore = Math.max(...DIMENSION_KEYS.map((key) => dimensions[key] || 0), 0.001);
   return Object.fromEntries(
-    Object.entries(dimensions).map(([key, value]) => [key, Number((value / maxScore).toFixed(3))]),
+    DIMENSION_KEYS.map((key) => {
+      const value = dimensions[key] || 0;
+      return [key, value > 0 ? Number((value / maxScore).toFixed(3)) : 0];
+    }),
   );
+}
+
+/** 保证展示层只有 14 维中文 key，并从人格轮廓补全低分维度 */
+function finalizeDisplayDimensions(blended, typeTemplate) {
+  const migrated = normalizeDimensionRecord(blended);
+  const filled = createDimensionState();
+
+  for (const key of DIMENSION_KEYS) {
+    filled[key] = migrated[key] || 0;
+  }
+
+  const typeRanked = DIMENSION_KEYS.map((key) => [key, typeTemplate[key] || 0]).sort((a, b) => b[1] - a[1]);
+
+  for (const [key, typeVal] of typeRanked.slice(0, 10)) {
+    if (typeVal > 0.15) {
+      filled[key] = Math.max(filled[key], typeVal * 0.32);
+    }
+  }
+
+  const normalized = normalizeDimensions(filled);
+  const activeCount = DIMENSION_KEYS.filter((key) => normalized[key] > 0).length;
+
+  if (activeCount < 6) {
+    for (const [key, typeVal] of typeRanked.slice(0, 8)) {
+      if (typeVal > 0.1) {
+        normalized[key] = Math.max(normalized[key] || 0, Number((typeVal * 0.45).toFixed(3)));
+      }
+    }
+    return normalizeDimensions(normalized);
+  }
+
+  return normalized;
 }
 
 function getTypeProfile(type) {
@@ -141,7 +176,7 @@ function mergeTypeProfiles(primaryType, secondaryType) {
 
 /**
  * 标签观测 + 人格轮廓融合，供雷达图展示
- * 标签占 50%，主/副人格轮廓占 50%，避免未命中标签的维度全为 0
+ * 标签占 45%，主/副人格轮廓占 55%，避免未命中标签的维度全为 0
  */
 function blendDimensionsForDisplay(tagDimensions, primaryType, secondaryType) {
   const typeTemplate = mergeTypeProfiles(primaryType, secondaryType);
@@ -150,10 +185,10 @@ function blendDimensionsForDisplay(tagDimensions, primaryType, secondaryType) {
   for (const key of DIMENSION_KEYS) {
     const tagScore = tagDimensions[key] || 0;
     const typeScore = typeTemplate[key] || 0;
-    blended[key] = tagScore * 0.5 + typeScore * 0.5;
+    blended[key] = tagScore * 0.45 + typeScore * 0.55;
   }
 
-  return normalizeDimensions(blended);
+  return finalizeDisplayDimensions(blended, typeTemplate);
 }
 
 /** 雷达图优先展示的维度（按融合后得分排序，取前 N 个） */
@@ -240,6 +275,8 @@ export function analyzePersonality(aggregatedFeatures) {
     traits: pickTraits(displayDimensions, primaryType, secondaryType),
     dimensions: displayDimensions,
     dimensions_from_tags: tagNormalized,
+    dimension_keys: [...DIMENSION_KEYS],
+    dimension_labels: { ...DIMENSION_LABELS },
     radar_keys: selectRadarDimensionKeys(displayDimensions),
     type_scores: rankedTypes.map(({ name, score }) => ({ name, score })),
   };

@@ -42,3 +42,39 @@ export function analyzeAnimeList(animeList) {
 export function recommendAnimeList(body) {
   return postJson("/recommend", body);
 }
+
+/** 记录一次访问并返回累计访问量 */
+export async function recordSiteVisit() {
+  const response = await fetch(`${API_BASE_URL}/stats/visit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  const payload = await response.json();
+  if (!response.ok || !payload.success) {
+    throw new Error(payload.error || "访问统计失败");
+  }
+  return payload.data.page_views;
+}
+
+/** 仅读取累计访问量（不 +1） */
+export async function fetchSiteVisitCount() {
+  const response = await fetch(`${API_BASE_URL}/stats/visit`);
+  const payload = await response.json();
+  if (!response.ok || !payload.success) {
+    throw new Error(payload.error || "访问统计失败");
+  }
+  return payload.data.page_views;
+}
+
+export async function submitFeedback({ message, contact }) {
+  const response = await fetch(`${API_BASE_URL}/feedback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message, contact }),
+  });
+  const payload = await response.json();
+  if (!response.ok || !payload.success) {
+    throw new Error(payload.error || "反馈提交失败");
+  }
+  return payload.data;
+}

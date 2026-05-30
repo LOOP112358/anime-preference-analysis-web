@@ -5,3 +5,5 @@ dist
 .env.local
 npm-debug.log*
 coverage
+backend/data/site-stats.json
+backend/data/feedback.jsonl

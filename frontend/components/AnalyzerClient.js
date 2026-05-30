@@ -443,7 +443,7 @@ export default function AnalyzerClient() {
               </div>
               <RadarChart
                 dimensions={result?.dimensions || {}}
-                dimensionLabels={CONFIG.dimLabels}
+                dimensionLabels={result?.dimension_labels || CONFIG.dimLabels}
                 radarKeys={result?.radar_keys || CONFIG.radarKeys}
               />
             </div>
@@ -457,12 +457,20 @@ export default function AnalyzerClient() {
             <div className={panelClass}>
               <h2 className="font-display text-xl text-stone-800">维度明细</h2>
               <div className="mt-4 grid gap-3">
-                {Object.entries(result?.dimensions || {})
+                {(result?.dimension_keys || Object.keys(CONFIG.dimLabels))
+                  .map((key) => [key, Number(result?.dimensions?.[key] || 0)])
                   .sort((a, b) => b[1] - a[1])
-                  .map(([key, value]) => (
+                  .map(([key, value]) => {
+                    const dimLabels = result?.dimension_labels || CONFIG.dimLabels;
+                    const label = dimLabels[key];
+                    if (!label) {
+                      return null;
+                    }
+
+                    return (
                     <div key={key}>
                       <div className="mb-1 flex items-center justify-between text-sm text-stone-700">
-                        <span>{CONFIG.dimLabels[key] || key}</span>
+                        <span>{label}</span>
                         <span>{Math.round(value * 100)}%</span>
                       </div>
                   <div className="h-2 rounded-full border border-stone-300 bg-stone-100">
@@ -472,7 +480,8 @@ export default function AnalyzerClient() {
                         />
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
               </div>
             </div>
           </section>

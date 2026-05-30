@@ -6,6 +6,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 import analyzeRouter from "./routes/analyze.js";
 import recommendRouter from "./routes/recommend.js";
+import statsRouter from "./routes/stats.js";
+import feedbackRouter from "./routes/feedback.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -58,15 +60,25 @@ app.get("/", (_req, res) => {
 });
 
 app.get("/health", (_req, res) => {
+  const deployShaPath = path.join(__dirname, "..", "DEPLOYED_SHA");
+  let deploy_sha = null;
+  if (existsSync(deployShaPath)) {
+    deploy_sha = readFileSync(deployShaPath, "utf-8").trim().slice(0, 7);
+  }
+
   res.json({
     success: true,
     service: "acg-personality-analyzer-backend",
     timestamp: new Date().toISOString(),
+    deploy_sha,
+    dimension_count: 14,
   });
 });
 
 app.use("/api/analyze", analyzeRouter);
 app.use("/api/recommend", recommendRouter);
+app.use("/api/stats", statsRouter);
+app.use("/api/feedback", feedbackRouter);
 
 app.use((err, _req, res, _next) => {
   console.error(err);
