@@ -351,7 +351,7 @@ export default function UserPostClient() {
                 {search ? "没有匹配的卡片" : "还没有内容，点击上方按钮发布第一条吧"}
               </p>
             ) : (
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {listForPage.map((item) => (
                   <PostCard
                     key={`${item.ani_id || item.char_id}-${item.user_id}`}
