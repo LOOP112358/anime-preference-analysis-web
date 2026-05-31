@@ -14,7 +14,7 @@ export default function PostCard({ item, onDelete, canDelete }) {
 
   return (
     <article className="sketch-card overflow-hidden p-0">
-      <div className="relative aspect-[16/10] border-b-[1.5px] border-stone-800 bg-gradient-to-br from-moe-pink-soft to-white">
+      <div className={`relative border-b-[1.5px] border-stone-800 bg-gradient-to-br from-moe-pink-soft to-white ${isAnime ? "aspect-[16/10]" : "aspect-[3/4]"}`}>
         <img
           src={image}
           alt={title}
