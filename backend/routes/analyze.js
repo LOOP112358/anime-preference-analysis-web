@@ -3,8 +3,17 @@ import { scrapeAnimeBundle } from "../services/scraper.js";
 import { extractFeatureVector, buildEnrichedWordCloud } from "../services/extractor.js";
 import { analyzePersonality } from "../services/personalityEngine.js";
 import { generateAnalysis } from "../services/llmService.js";
+import { normalizeDimensionRecord } from "../services/contentVector.js";
+import { DIMENSION_KEYS, DIMENSION_LABELS } from "../services/taxonomy.js";
 
 const router = express.Router();
+
+function sanitizeDimensions(dimensions) {
+  const normalized = normalizeDimensionRecord(dimensions);
+  return Object.fromEntries(
+    DIMENSION_KEYS.map((key) => [key, Number((normalized[key] || 0).toFixed(3))]),
+  );
+}
 
 function normalizeInputList(animeList) {
   if (!Array.isArray(animeList)) {
@@ -43,6 +52,9 @@ router.post("/", async (req, res, next) => {
       success: true,
       data: {
         ...personalityResult,
+        dimensions: sanitizeDimensions(personalityResult.dimensions),
+        dimension_keys: [...DIMENSION_KEYS],
+        dimension_labels: { ...DIMENSION_LABELS },
         analysis: llmResult.analysis,
         works: scrapedItems,
         feature_cloud: featureCloud,
