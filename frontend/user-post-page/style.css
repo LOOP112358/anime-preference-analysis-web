@@ -151,9 +151,9 @@ body {
 /* 角色卡片（竖版，更适合人物） */
 .card-char img {
   width: 100%;
-  height: 280px;
-  object-fit: cover;
-  object-position: center 20%;
+  height: auto;
+  object-fit: contain;
+  background: #f1f5f9;
 }
 
 .card-body { padding:16px; }
