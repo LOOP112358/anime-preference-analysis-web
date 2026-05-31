@@ -18,7 +18,7 @@ export default function PostCard({ item, onDelete, canDelete }) {
         <img
           src={image}
           alt={title}
-          className="h-full w-full object-cover"
+          className={`h-full w-full object-cover ${isAnime ? "" : "object-top"}`}
           onError={(event) => {
             event.currentTarget.src = DEFAULT_IMG;
           }}
