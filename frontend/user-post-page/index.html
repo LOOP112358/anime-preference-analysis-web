@@ -30,9 +30,11 @@
   <div class="body-layout">
     <div class="main-menu">
       <div class="menu-item" data-page="home">首页</div>
-      <div class="menu-item active" data-page="profile">我的主页</div>
-      <div class="menu-item" data-page="anime">我喜欢的番</div>
-      <div class="menu-item" data-page="char">我喜欢的角色</div>
+      <div class="menu-item" data-page="profile">我的主页</div>
+      <div class="menu-item" data-page="anime">番剧广场</div>
+      <div class="menu-item" data-page="char">角色广场</div>
+      <div class="menu-item" data-page="likedAnime">我收藏的番</div>
+      <div class="menu-item" data-page="likedChar">我收藏的角色</div>
     </div>
 
     <div class="content">
@@ -52,23 +54,32 @@
       </div>
 
       <div id="page-anime" class="page">
-        <div class="profile-header"><h1>我喜欢的番</h1><button id="publishAnimeBtn">发布番剧</button></div>
+        <div class="profile-header"><h1>番剧广场</h1><button id="publishAnimeBtn">发布番剧</button></div>
         <div class="search-bar"><input placeholder="搜索番剧"></div>
         <div class="card-list" id="animeList"></div>
       </div>
 
       <div id="page-char" class="page">
-        <div class="profile-header"><h1>我喜欢的角色</h1><button id="publishCharBtn">发布角色</button></div>
+        <div class="profile-header"><h1>角色广场</h1><button id="publishCharBtn">发布角色</button></div>
         <div class="search-bar"><input placeholder="搜索角色"></div>
         <div class="card-list" id="charList"></div>
+      </div>
+
+      <div id="page-likedAnime" class="page">
+        <div class="profile-header"><h1>我收藏的番剧</h1></div>
+        <div class="card-list" id="likedAnimeList"></div>
+      </div>
+
+      <div id="page-likedChar" class="page">
+        <div class="profile-header"><h1>我收藏的角色</h1></div>
+        <div class="card-list" id="likedCharList"></div>
       </div>
     </div>
   </div>
 
-  <!-- 发布弹窗（新增图片输入） -->
   <div id="publishModal" class="modal">
     <div class="modal-content">
-      <span class="close-btn">&times;</span>
+      <span class="close-btn" id="closeModal">&times;</span>
       <h3 id="modalTitle">发布</h3>
       <input type="text" id="pubName" placeholder="名称">
       <input type="text" id="pubExtra" placeholder="">

@@ -9,7 +9,7 @@ const setUser = (d) => {
 };
 const header = () => ({ "Content-Type": "application/json" });
 
-let currentPublishType = ""; // anime / char
+let currentPublishType = "";
 
 function initMenu() {
   const mi = document.querySelectorAll(".menu-item");
@@ -34,9 +34,6 @@ async function loadProfile() {
   loadUserCards(user_id);
 }
 
-// ==============================================
-// 发布弹窗（增加图片输入 + 裁剪）
-// ==============================================
 function initModal() {
   const modal = document.getElementById("publishModal");
   const close = document.getElementById("closeModal");
@@ -48,7 +45,6 @@ function initModal() {
 
   close.onclick = () => { modal.style.display = "none"; };
 
-  // 发布番剧
   document.getElementById("publishAnimeBtn").onclick = () => {
     currentPublishType = "anime";
     title.innerText = "发布番剧";
@@ -60,7 +56,6 @@ function initModal() {
     submit.onclick = postAnime;
   };
 
-  // 发布角色
   document.getElementById("publishBtn").onclick =
   document.getElementById("publishCharBtn").onclick = () => {
     currentPublishType = "char";
@@ -74,7 +69,80 @@ function initModal() {
   };
 }
 
-// 登录
+// ==============================================
+// 收藏功能（番剧 + 角色 分开）
+// ==============================================
+async function toggleAnimeLike(ani_id) {
+  const res = await fetch(API + "/anime/like", {
+    method: "POST",
+    headers: header(),
+    body: JSON.stringify({ user_id: uid(), ani_id })
+  });
+  const j = await res.json();
+  alert(j.message);
+  loadAnime();
+  loadMyLikedAnime();
+}
+
+async function toggleCharLike(char_id) {
+  const res = await fetch(API + "/character/like", {
+    method: "POST",
+    headers: header(),
+    body: JSON.stringify({ user_id: uid(), char_id })
+  });
+  const j = await res.json();
+  alert(j.message);
+  loadChar();
+  loadMyLikedChar();
+}
+
+// 加载我收藏的番剧
+async function loadMyLikedAnime() {
+  const res = await fetch(API + "/user/liked/anime?user_id=" + uid());
+  const j = await res.json();
+  let html = "";
+  if (j.data) {
+    j.data.forEach(item => {
+      html += `
+      <div class="card card-anime">
+        <div class="like-btn liked" onclick="toggleAnimeLike('${item.ani_id}')">♥</div>
+        <img src="${item.ani_img || '/static/default.jpg'}" onError="this.src='/static/default.jpg'">
+        <div class="card-body">
+          <h3>${item.ani_name}</h3>
+          <div class="meta">${item.ani_type}</div>
+          <div class="com">${item.ani_com}</div>
+        </div>
+      </div>`;
+    });
+  }
+  document.getElementById("likedAnimeList").innerHTML = html;
+}
+
+// 加载我收藏的角色
+async function loadMyLikedChar() {
+  const res = await fetch(API + "/user/liked/character?user_id=" + uid());
+  const j = await res.json();
+  let html = "";
+  if (j.data) {
+    j.data.forEach(item => {
+      html += `
+      <div class="card card-char">
+        <div class="like-btn liked" onclick="toggleCharLike('${item.char_id}')">♥</div>
+        <img src="${item.char_img || '/static/default.jpg'}" onError="this.src='/static/default.jpg'">
+        <div class="card-body">
+          <h3>${item.char_name}</h3>
+          <div class="meta">出自：${item.char_from}</div>
+          <div class="com">${item.char_com}</div>
+        </div>
+      </div>`;
+    });
+  }
+  document.getElementById("likedCharList").innerHTML = html;
+}
+
+// ==============================================
+// 登录/注册
+// ==============================================
 async function login() {
   const user_name = document.getElementById("username").value;
   const password = document.getElementById("password").value;
@@ -92,7 +160,6 @@ async function login() {
   }
 }
 
-// 注册
 async function register() {
   const user_name = document.getElementById("username").value;
   const password = document.getElementById("password").value;
@@ -105,7 +172,9 @@ async function register() {
   alert(j.message);
 }
 
-// 发布番剧（支持自定义图片）
+// ==============================================
+// 发布
+// ==============================================
 async function postAnime() {
   const ani_name = document.getElementById("pubName").value.trim();
   const ani_type = document.getElementById("pubExtra").value.trim();
@@ -115,13 +184,7 @@ async function postAnime() {
 
   const res = await fetch(API + "/anime/add", {
     method: "POST", headers: header(),
-    body: JSON.stringify({
-      user_id: uid(),
-      ani_name,
-      ani_type,
-      ani_img,
-      ani_com
-    })
+    body: JSON.stringify({ user_id: uid(), ani_name, ani_type, ani_img, ani_com })
   });
   const j = await res.json();
   alert(j.message);
@@ -131,7 +194,6 @@ async function postAnime() {
   }
 }
 
-// 发布角色（支持自定义图片）
 async function postChar() {
   const char_name = document.getElementById("pubName").value.trim();
   const char_from = document.getElementById("pubExtra").value.trim();
@@ -141,13 +203,7 @@ async function postChar() {
 
   const res = await fetch(API + "/character/add", {
     method: "POST", headers: header(),
-    body: JSON.stringify({
-      user_id: uid(),
-      char_name,
-      char_from,
-      char_img,
-      char_com
-    })
+    body: JSON.stringify({ user_id: uid(), char_name, char_from, char_img, char_com })
   });
   const j = await res.json();
   alert(j.message);
@@ -157,7 +213,9 @@ async function postChar() {
   }
 }
 
-// 加载番剧
+// ==============================================
+// 加载列表
+// ==============================================
 async function loadAnime() {
   const res = await fetch(API + "/anime/list");
   const j = await res.json();
@@ -165,6 +223,7 @@ async function loadAnime() {
   j.data.forEach(item => {
     html += `
     <div class="card card-anime">
+      <div class="like-btn" onclick="toggleAnimeLike('${item.ani_id}')">♡</div>
       <img src="${item.ani_img || '/static/default.jpg'}" onError="this.src='/static/default.jpg'">
       <div class="card-body">
         <h3>${item.ani_name}</h3>
@@ -176,7 +235,6 @@ async function loadAnime() {
   document.getElementById("animeList").innerHTML = html;
 }
 
-// 加载角色（竖版卡片）
 async function loadChar() {
   const res = await fetch(API + "/character/list");
   const j = await res.json();
@@ -184,6 +242,7 @@ async function loadChar() {
   j.data.forEach(item => {
     html += `
     <div class="card card-char">
+      <div class="like-btn" onclick="toggleCharLike('${item.char_id}')">♡</div>
       <img src="${item.char_img || '/static/default.jpg'}" onError="this.src='/static/default.jpg'">
       <div class="card-body">
         <h3>${item.char_name}</h3>
@@ -195,7 +254,6 @@ async function loadChar() {
   document.getElementById("charList").innerHTML = html;
 }
 
-// 个人主页
 async function loadUserCards(user_id) {
   const a = await fetch(API + `/user/${user_id}/anime`);
   const b = await fetch(API + `/user/${user_id}/character`);
@@ -225,6 +283,9 @@ async function loadUserCards(user_id) {
   document.getElementById("profileCardList").innerHTML = html;
 }
 
+// ==============================================
+// 启动
+// ==============================================
 window.onload = async () => {
   initMenu();
   initModal();
@@ -235,6 +296,8 @@ window.onload = async () => {
     loadProfile();
     loadAnime();
     loadChar();
+    loadMyLikedAnime();
+    loadMyLikedChar();
   } else {
     document.getElementById("loginPage").style.display = "flex";
     document.getElementById("mainLayout").style.display = "none";
