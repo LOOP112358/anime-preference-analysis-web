@@ -1,6 +1,5 @@
 const API = "http://127.0.0.1:5000";
 
-// 工具
 const uid = () => localStorage.getItem("user_id") || "";
 const setUser = (d) => {
   localStorage.setItem("user_id", d.user_id);
@@ -10,7 +9,8 @@ const setUser = (d) => {
 };
 const header = () => ({ "Content-Type": "application/json" });
 
-// 页面切换
+let currentPublishType = ""; // anime / char
+
 function initMenu() {
   const mi = document.querySelectorAll(".menu-item");
   const pg = document.querySelectorAll(".page");
@@ -24,7 +24,6 @@ function initMenu() {
   });
 }
 
-// 加载个人主页
 async function loadProfile() {
   const user_id = uid();
   if (!user_id) return;
@@ -35,36 +34,41 @@ async function loadProfile() {
   loadUserCards(user_id);
 }
 
-// 发布弹窗
+// ==============================================
+// 发布弹窗（增加图片输入 + 裁剪）
+// ==============================================
 function initModal() {
   const modal = document.getElementById("publishModal");
   const close = document.getElementById("closeModal");
   const title = document.getElementById("modalTitle");
-  const name = document.getElementById("pubName");
   const extra = document.getElementById("pubExtra");
-  const com = document.getElementById("pubCom");
+  const imgWrap = document.getElementById("pubImageWrap");
+  const imgInput = document.getElementById("pubImage");
   const submit = document.getElementById("submitBtn");
 
   close.onclick = () => { modal.style.display = "none"; };
 
-  document.getElementById("publishBtn").onclick = () => {
-    title.innerText = "发布角色";
-    extra.placeholder = "出处番剧";
-    extra.style.display = "block";
-    modal.style.display = "flex";
-    submit.onclick = postChar;
-  };
+  // 发布番剧
   document.getElementById("publishAnimeBtn").onclick = () => {
+    currentPublishType = "anime";
     title.innerText = "发布番剧";
     extra.placeholder = "类型（可选）";
     extra.style.display = "block";
+    imgWrap.style.display = "block";
+    imgInput.placeholder = "图片链接（可选，不填则自动抓取）";
     modal.style.display = "flex";
     submit.onclick = postAnime;
   };
+
+  // 发布角色
+  document.getElementById("publishBtn").onclick =
   document.getElementById("publishCharBtn").onclick = () => {
+    currentPublishType = "char";
     title.innerText = "发布角色";
     extra.placeholder = "出处番剧";
     extra.style.display = "block";
+    imgWrap.style.display = "block";
+    imgInput.placeholder = "角色图片链接（可选）";
     modal.style.display = "flex";
     submit.onclick = postChar;
   };
@@ -101,15 +105,23 @@ async function register() {
   alert(j.message);
 }
 
-// 发布番剧
+// 发布番剧（支持自定义图片）
 async function postAnime() {
   const ani_name = document.getElementById("pubName").value.trim();
   const ani_type = document.getElementById("pubExtra").value.trim();
+  const ani_img = document.getElementById("pubImage").value.trim();
   const ani_com = document.getElementById("pubCom").value.trim();
   if (!ani_name) return alert("请输入番剧名称");
+
   const res = await fetch(API + "/anime/add", {
     method: "POST", headers: header(),
-    body: JSON.stringify({ user_id: uid(), ani_name, ani_type, ani_com })
+    body: JSON.stringify({
+      user_id: uid(),
+      ani_name,
+      ani_type,
+      ani_img,
+      ani_com
+    })
   });
   const j = await res.json();
   alert(j.message);
@@ -119,15 +131,23 @@ async function postAnime() {
   }
 }
 
-// 发布角色
+// 发布角色（支持自定义图片）
 async function postChar() {
   const char_name = document.getElementById("pubName").value.trim();
   const char_from = document.getElementById("pubExtra").value.trim();
+  const char_img = document.getElementById("pubImage").value.trim();
   const char_com = document.getElementById("pubCom").value.trim();
   if (!char_name) return alert("请输入角色名");
+
   const res = await fetch(API + "/character/add", {
     method: "POST", headers: header(),
-    body: JSON.stringify({ user_id: uid(), char_name, char_from, char_com })
+    body: JSON.stringify({
+      user_id: uid(),
+      char_name,
+      char_from,
+      char_img,
+      char_com
+    })
   });
   const j = await res.json();
   alert(j.message);
@@ -137,14 +157,14 @@ async function postChar() {
   }
 }
 
-// 加载番剧列表
+// 加载番剧
 async function loadAnime() {
   const res = await fetch(API + "/anime/list");
   const j = await res.json();
   let html = "";
   j.data.forEach(item => {
     html += `
-    <div class="card">
+    <div class="card card-anime">
       <img src="${item.ani_img || '/static/default.jpg'}" onError="this.src='/static/default.jpg'">
       <div class="card-body">
         <h3>${item.ani_name}</h3>
@@ -156,14 +176,14 @@ async function loadAnime() {
   document.getElementById("animeList").innerHTML = html;
 }
 
-// 加载角色列表
+// 加载角色（竖版卡片）
 async function loadChar() {
   const res = await fetch(API + "/character/list");
   const j = await res.json();
   let html = "";
   j.data.forEach(item => {
     html += `
-    <div class="card">
+    <div class="card card-char">
       <img src="${item.char_img || '/static/default.jpg'}" onError="this.src='/static/default.jpg'">
       <div class="card-body">
         <h3>${item.char_name}</h3>
@@ -175,7 +195,7 @@ async function loadChar() {
   document.getElementById("charList").innerHTML = html;
 }
 
-// 加载个人主页所有卡片
+// 个人主页
 async function loadUserCards(user_id) {
   const a = await fetch(API + `/user/${user_id}/anime`);
   const b = await fetch(API + `/user/${user_id}/character`);
@@ -186,12 +206,14 @@ async function loadUserCards(user_id) {
   if (jb.success) all = all.concat(jb.data);
   let html = "";
   all.forEach(item => {
+    const isAnime = !!item.ani_id;
     const img = item.ani_img || item.char_img;
     const title = item.ani_name || item.char_name;
     const meta = item.ani_type || item.char_from;
     const com = item.ani_com || item.char_com;
+    const cls = isAnime ? "card-anime" : "card-char";
     html += `
-    <div class="card">
+    <div class="card ${cls}">
       <img src="${img || '/static/default.jpg'}" onError="this.src='/static/default.jpg'">
       <div class="card-body">
         <h3>${title}</h3>
@@ -203,7 +225,6 @@ async function loadUserCards(user_id) {
   document.getElementById("profileCardList").innerHTML = html;
 }
 
-// 初始化
 window.onload = async () => {
   initMenu();
   initModal();
