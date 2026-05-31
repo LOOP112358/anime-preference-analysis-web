@@ -38,6 +38,27 @@ CREATE TABLE character_post (
     FOREIGN KEY (user_id) REFERENCES user(user_id),
     UNIQUE(user_id, char_name)
 );
+CREATE TABLE anime_favorite (
+    user_id INT NOT NULL,
+    ani_id INT NOT NULL,
+    create_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (user_id, ani_id),
+
+    FOREIGN KEY (user_id) REFERENCES user(user_id),
+    FOREIGN KEY (ani_id) REFERENCES anime_post(ani_id)
+);
+
+CREATE TABLE character_favorite (
+    user_id INT NOT NULL,
+    char_id INT NOT NULL,
+    create_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (user_id, char_id),
+
+    FOREIGN KEY (user_id) REFERENCES user(user_id),
+    FOREIGN KEY (char_id) REFERENCES character_post(char_id)
+);
 INSERT INTO user(user_name, password, photo, user_intro)
 VALUES
 ('Cheria', '123456', 'upload/me.jpg', '喜欢日常系和轻百合'),

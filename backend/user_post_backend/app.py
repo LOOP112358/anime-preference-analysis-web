@@ -906,5 +906,158 @@ def user_character_list(user_id):
             conn.close()
 
 
+# ----------------- 收藏相关接口 -----------------
+
+# 收藏番剧
+@app.route("/favorite/anime/add", methods=["POST"])
+def favorite_anime_add():
+    data = get_data()
+    user_id = data.get("user_id")
+    ani_id = data.get("ani_id")
+
+    if not user_id or not ani_id:
+        return fail("用户ID和番剧ID不能为空")
+
+    conn = None
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            sql = "INSERT INTO anime_favorite(user_id, ani_id) VALUES(%s, %s)"
+            cur.execute(sql, (user_id, ani_id))
+            conn.commit()
+        return ok("番剧收藏成功")
+    except pymysql.err.IntegrityError:
+        return fail("你已经收藏过这个番剧了")
+    except Exception as e:
+        return fail(f"收藏失败：{e}")
+    finally:
+        if conn:
+            conn.close()
+
+
+# 取消收藏番剧
+@app.route("/favorite/anime/delete", methods=["POST"])
+def favorite_anime_delete():
+    data = get_data()
+    user_id = data.get("user_id")
+    ani_id = data.get("ani_id")
+
+    if not user_id or not ani_id:
+        return fail("用户ID和番剧ID不能为空")
+
+    conn = None
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            sql = "DELETE FROM anime_favorite WHERE user_id=%s AND ani_id=%s"
+            cur.execute(sql, (user_id, ani_id))
+            conn.commit()
+        return ok("取消收藏成功")
+    except Exception as e:
+        return fail(f"取消收藏失败：{e}")
+    finally:
+        if conn:
+            conn.close()
+
+
+# 收藏角色
+@app.route("/favorite/character/add", methods=["POST"])
+def favorite_character_add():
+    data = get_data()
+    user_id = data.get("user_id")
+    char_id = data.get("char_id")
+
+    if not user_id or not char_id:
+        return fail("用户ID和角色ID不能为空")
+
+    conn = None
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            sql = "INSERT INTO character_favorite(user_id, char_id) VALUES(%s, %s)"
+            cur.execute(sql, (user_id, char_id))
+            conn.commit()
+        return ok("角色收藏成功")
+    except pymysql.err.IntegrityError:
+        return fail("你已经收藏过这个角色了")
+    except Exception as e:
+        return fail(f"收藏失败：{e}")
+    finally:
+        if conn:
+            conn.close()
+
+
+# 取消收藏角色
+@app.route("/favorite/character/delete", methods=["POST"])
+def favorite_character_delete():
+    data = get_data()
+    user_id = data.get("user_id")
+    char_id = data.get("char_id")
+
+    if not user_id or not char_id:
+        return fail("用户ID和角色ID不能为空")
+
+    conn = None
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            sql = "DELETE FROM character_favorite WHERE user_id=%s AND char_id=%s"
+            cur.execute(sql, (user_id, char_id))
+            conn.commit()
+        return ok("取消收藏成功")
+    except Exception as e:
+        return fail(f"取消收藏失败：{e}")
+    finally:
+        if conn:
+            conn.close()
+
+
+# 查看用户收藏的番剧列表
+@app.route("/user/<int:user_id>/favorite/anime", methods=["GET"])
+def favorite_anime_list(user_id):
+    conn = None
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            sql = """
+            SELECT a.ani_id, a.ani_name, a.ani_img, a.ani_type, a.ani_com, a.create_at
+            FROM anime_post a
+            JOIN anime_favorite f ON a.ani_id = f.ani_id
+            WHERE f.user_id=%s
+            ORDER BY f.create_at DESC
+            """
+            cur.execute(sql, (user_id,))
+            rows = cur.fetchall()
+        return ok("获取成功", rows)
+    except Exception as e:
+        return fail(f"获取失败：{e}")
+    finally:
+        if conn:
+            conn.close()
+
+
+# 查看用户收藏的角色列表
+@app.route("/user/<int:user_id>/favorite/character", methods=["GET"])
+def favorite_character_list(user_id):
+    conn = None
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            sql = """
+            SELECT c.char_id, c.char_name, c.char_from, c.char_img, c.char_com, c.create_at
+            FROM character_post c
+            JOIN character_favorite f ON c.char_id = f.char_id
+            WHERE f.user_id=%s
+            ORDER BY f.create_at DESC
+            """
+            cur.execute(sql, (user_id,))
+            rows = cur.fetchall()
+        return ok("获取成功", rows)
+    except Exception as e:
+        return fail(f"获取失败：{e}")
+    finally:
+        if conn:
+            conn.close()
+            
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
