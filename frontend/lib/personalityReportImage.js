@@ -461,3 +461,19 @@ export function downloadPersonalityReport(blob, filename = "acg-personality-repo
   anchor.click();
   URL.revokeObjectURL(url);
 }
+
+export function isWeChatBrowser() {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+  return /MicroMessenger/i.test(navigator.userAgent);
+}
+
+export function savePersonalityReport(blob) {
+  if (isWeChatBrowser()) {
+    return { mode: "preview", url: URL.createObjectURL(blob) };
+  }
+
+  downloadPersonalityReport(blob);
+  return { mode: "download" };
+}

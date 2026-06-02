@@ -3,12 +3,13 @@
 import { useMemo, useState } from "react";
 import { analyzeAnimeList, recommendAnimeList } from "../lib/api";
 import {
-  downloadPersonalityReport,
   generatePersonalityReportBlob,
+  savePersonalityReport,
 } from "../lib/personalityReportImage";
 import PersonalityCard from "./PersonalityCard";
 import RadarChart from "./RadarChart";
 import WordCloudPanel from "./WordCloudPanel";
+import ReportSaveModal from "./ReportSaveModal";
 import MoeLabel from "./MoeLabel";
 import {
   btnPrimaryClass,
@@ -127,6 +128,8 @@ export default function AnalyzerClient() {
   const [error, setError] = useState("");
   const [reportLoading, setReportLoading] = useState(false);
   const [reportMessage, setReportMessage] = useState("");
+  const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
+  const [reportPreviewUrl, setReportPreviewUrl] = useState("");
 
   const [recMode, setRecMode] = useState("content");
   const [recLimit, setRecLimit] = useState(10);
@@ -154,6 +157,14 @@ export default function AnalyzerClient() {
     }
   }
 
+  function closeReportPreview() {
+    setReportPreviewOpen(false);
+    if (reportPreviewUrl) {
+      URL.revokeObjectURL(reportPreviewUrl);
+      setReportPreviewUrl("");
+    }
+  }
+
   async function handleGenerateReport() {
     if (!result?.primary_type) return;
 
@@ -162,8 +173,14 @@ export default function AnalyzerClient() {
 
     try {
       const blob = await generatePersonalityReportBlob(result, parsedItems);
-      downloadPersonalityReport(blob);
-      setReportMessage("报告图已保存");
+      const saveResult = savePersonalityReport(blob);
+      if (saveResult.mode === "preview") {
+        setReportPreviewUrl(saveResult.url);
+        setReportPreviewOpen(true);
+        setReportMessage("请长按图片保存到相册");
+      } else {
+        setReportMessage("报告图已保存");
+      }
     } catch (reportError) {
       setReportMessage(reportError.message || "报告图生成失败");
     } finally {
@@ -515,6 +532,7 @@ export default function AnalyzerClient() {
           </section>
         </>
       ) : null}
+      <ReportSaveModal open={reportPreviewOpen} previewUrl={reportPreviewUrl} onClose={closeReportPreview} />
     </main>
   );
 }

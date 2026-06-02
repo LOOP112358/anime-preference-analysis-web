@@ -1,20 +1,17 @@
 /**
- * 浏览器端默认走同源 /post-api（由 next.config 代理到 Flask :5001），避免 CORS 导致 Failed to fetch。
+ * 浏览器端始终走同源 /post-api（由 next.config 代理到 Flask :5001）。
+ * 切勿在浏览器里使用构建时写入的 localhost 绝对地址，否则手机/访客会连到自己的 127.0.0.1。
  * 服务端渲染或需直连时可设置 NEXT_PUBLIC_POST_API_URL=http://127.0.0.1:5001
  */
 export function getPostApiBase() {
-  if (process.env.NEXT_PUBLIC_POST_API_URL) {
-    const configured = process.env.NEXT_PUBLIC_POST_API_URL.replace(/\/$/, "");
-    // localhost 只对开发机有效，访客手机无法访问，线上应走同源 /post-api
-    if (typeof window !== "undefined") {
-      const isLocalOnly = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(configured);
-      if (isLocalOnly) return "/post-api";
-    }
-    return configured;
-  }
   if (typeof window !== "undefined") {
     return "/post-api";
   }
+
+  if (process.env.NEXT_PUBLIC_POST_API_URL) {
+    return process.env.NEXT_PUBLIC_POST_API_URL.replace(/\/$/, "");
+  }
+
   return "http://127.0.0.1:5001";
 }
 

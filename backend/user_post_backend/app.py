@@ -154,6 +154,25 @@ def is_allowed_image_proxy(url):
         return False
 
 
+def bangumi_image_request_kwargs():
+    kwargs = {
+        "headers": {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            ),
+            "Referer": "https://bgm.tv/",
+            "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+        },
+        "timeout": 15,
+    }
+    proxy_url = os.environ.get("BANGUMI_HTTPS_PROXY") or os.environ.get("HTTPS_PROXY")
+    if proxy_url:
+        kwargs["proxies"] = {"http": proxy_url, "https": proxy_url}
+    return kwargs
+
+
 @app.route("/proxy/image", methods=["GET"])
 def proxy_image():
     url = request.args.get("url", "").strip()
@@ -163,17 +182,9 @@ def proxy_image():
         return fail("无效或不支持的图片地址")
 
     try:
-        r = requests.get(
-            url,
-            headers={
-                "User-Agent": "Mozilla/5.0 (compatible; anime-web/1.0)",
-                "Referer": "https://bgm.tv/",
-                "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-            },
-            timeout=15,
-        )
+        r = requests.get(url, **bangumi_image_request_kwargs())
         if r.status_code != 200:
-            return fail("图片获取失败")
+            return fail(f"图片获取失败（HTTP {r.status_code}）")
 
         content_type = r.headers.get("Content-Type", "image/jpeg")
         if not content_type.startswith("image/"):
