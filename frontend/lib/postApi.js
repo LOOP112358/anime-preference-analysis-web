@@ -4,7 +4,13 @@
  */
 export function getPostApiBase() {
   if (process.env.NEXT_PUBLIC_POST_API_URL) {
-    return process.env.NEXT_PUBLIC_POST_API_URL.replace(/\/$/, "");
+    const configured = process.env.NEXT_PUBLIC_POST_API_URL.replace(/\/$/, "");
+    // localhost 只对开发机有效，访客手机无法访问，线上应走同源 /post-api
+    if (typeof window !== "undefined") {
+      const isLocalOnly = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(configured);
+      if (isLocalOnly) return "/post-api";
+    }
+    return configured;
   }
   if (typeof window !== "undefined") {
     return "/post-api";
@@ -20,12 +26,24 @@ export function getPostDefaultAvatar() {
   return `${getPostApiBase()}/static/default_avatar.jpg`;
 }
 
+export function getProxiedImageUrl(imageUrl) {
+  if (!imageUrl) return "";
+  const normalized = imageUrl.startsWith("//") ? `https:${imageUrl}` : imageUrl;
+
+  if (normalized.startsWith("/static") || normalized.startsWith("/post-api/static")) {
+    const base = getPostApiBase();
+    return normalized.startsWith("/post-api") ? normalized : `${base}${normalized}`;
+  }
+  if (!normalized.startsWith("http")) {
+    return `${getPostApiBase()}${normalized.startsWith("/") ? normalized : `/${normalized}`}`;
+  }
+  return `${getPostApiBase()}/proxy/image?url=${encodeURIComponent(normalized)}`;
+}
+
 export function resolvePostImageUrl(url) {
   if (!url) return "";
-  if (url.startsWith("http")) return url;
-  if (url.startsWith("/static")) return `${getPostApiBase()}${url}`;
   if (url.startsWith("upload/")) return getPostDefaultAvatar();
-  return url.startsWith("/") ? `${getPostApiBase()}${url}` : url;
+  return getProxiedImageUrl(url);
 }
 
 async function parseJsonResponse(response) {
@@ -187,24 +205,20 @@ export function removeFavoriteCharacter(user_id, char_id) {
   });
 }
 
+export function fetchAnimeFavoriteUsers(aniId) {
+  return request(`/anime/${aniId}/favorite/users`);
+}
+
+export function fetchCharacterFavoriteUsers(charId) {
+  return request(`/character/${charId}/favorite/users`);
+}
+
 export function previewAnimeImage(name) {
   return request(`/preview/anime?name=${encodeURIComponent(name)}`);
 }
 
 export function previewCharacterImage(name) {
   return request(`/preview/character?name=${encodeURIComponent(name)}`);
-}
-
-export function getProxiedImageUrl(imageUrl) {
-  if (!imageUrl) return "";
-  if (imageUrl.startsWith("/static") || imageUrl.startsWith("/post-api/static")) {
-    const base = getPostApiBase();
-    return imageUrl.startsWith("/post-api") ? imageUrl : `${base}${imageUrl}`;
-  }
-  if (!imageUrl.startsWith("http")) {
-    return `${getPostApiBase()}${imageUrl}`;
-  }
-  return `${getPostApiBase()}/proxy/image?url=${encodeURIComponent(imageUrl)}`;
 }
 
 export async function uploadPostImage(blob, filename = "crop.jpg") {

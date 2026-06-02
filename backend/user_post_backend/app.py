@@ -157,20 +157,32 @@ def is_allowed_image_proxy(url):
 @app.route("/proxy/image", methods=["GET"])
 def proxy_image():
     url = request.args.get("url", "").strip()
+    if url.startswith("//"):
+        url = f"https:{url}"
     if not url.startswith("http") or not is_allowed_image_proxy(url):
         return fail("无效或不支持的图片地址")
 
     try:
         r = requests.get(
             url,
-            headers={"User-Agent": "anime-web-course-project/1.0"},
-            timeout=12,
+            headers={
+                "User-Agent": "Mozilla/5.0 (compatible; anime-web/1.0)",
+                "Referer": "https://bgm.tv/",
+                "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+            },
+            timeout=15,
         )
         if r.status_code != 200:
             return fail("图片获取失败")
 
         content_type = r.headers.get("Content-Type", "image/jpeg")
-        return Response(r.content, mimetype=content_type)
+        if not content_type.startswith("image/"):
+            content_type = "image/jpeg"
+        return Response(
+            r.content,
+            mimetype=content_type,
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
     except Exception as exc:
         return fail(f"图片代理失败：{exc}")
 
@@ -404,13 +416,19 @@ def get_user(user_id):
                 u.photo,
                 u.user_intro,
                 u.create_at,
-                COUNT(DISTINCT a.ani_id) AS anime_count,
-                COUNT(DISTINCT c.char_id) AS character_count
+                (SELECT COUNT(*) FROM anime_post WHERE user_id = u.user_id) AS anime_count,
+                (SELECT COUNT(*) FROM character_post WHERE user_id = u.user_id) AS character_count,
+                (
+                    (SELECT COUNT(*) FROM anime_favorite f
+                     JOIN anime_post a ON f.ani_id = a.ani_id
+                     WHERE a.user_id = u.user_id)
+                    +
+                    (SELECT COUNT(*) FROM character_favorite f
+                     JOIN character_post c ON f.char_id = c.char_id
+                     WHERE c.user_id = u.user_id)
+                ) AS total_favorites_received
             FROM user u
-            LEFT JOIN anime_post a ON u.user_id = a.user_id
-            LEFT JOIN character_post c ON u.user_id = c.user_id
             WHERE u.user_id = %s
-            GROUP BY u.user_id
             """
             cur.execute(sql, (user_id,))
             user = cur.fetchone()
@@ -572,7 +590,8 @@ def anime_list():
                 a.ani_img,
                 a.ani_type,
                 a.ani_com,
-                a.create_at
+                a.create_at,
+                (SELECT COUNT(*) FROM anime_favorite f WHERE f.ani_id = a.ani_id) AS favorite_count
             FROM anime_post a
             LEFT JOIN user u ON a.user_id = u.user_id
             ORDER BY a.ani_id DESC
@@ -768,7 +787,8 @@ def character_list():
                 c.char_from,
                 c.char_img,
                 c.char_com,
-                c.create_at
+                c.create_at,
+                (SELECT COUNT(*) FROM character_favorite f WHERE f.char_id = c.char_id) AS favorite_count
             FROM character_post c
             LEFT JOIN user u ON c.user_id = u.user_id
             ORDER BY c.char_id DESC
@@ -916,7 +936,8 @@ def user_anime_list(user_id):
                 a.ani_img,
                 a.ani_type,
                 a.ani_com,
-                a.create_at
+                a.create_at,
+                (SELECT COUNT(*) FROM anime_favorite f WHERE f.ani_id = a.ani_id) AS favorite_count
             FROM anime_post a
             LEFT JOIN user u ON a.user_id = u.user_id
             WHERE a.user_id=%s
@@ -953,7 +974,8 @@ def user_character_list(user_id):
                 c.char_from,
                 c.char_img,
                 c.char_com,
-                c.create_at
+                c.create_at,
+                (SELECT COUNT(*) FROM character_favorite f WHERE f.char_id = c.char_id) AS favorite_count
             FROM character_post c
             LEFT JOIN user u ON c.user_id = u.user_id
             WHERE c.user_id=%s
@@ -1095,7 +1117,8 @@ def favorite_anime_list(user_id):
                 a.ani_img,
                 a.ani_type,
                 a.ani_com,
-                a.create_at
+                a.create_at,
+                (SELECT COUNT(*) FROM anime_favorite f2 WHERE f2.ani_id = a.ani_id) AS favorite_count
             FROM anime_post a
             JOIN anime_favorite f ON a.ani_id = f.ani_id
             LEFT JOIN user u ON a.user_id = u.user_id
@@ -1129,7 +1152,8 @@ def favorite_character_list(user_id):
                 c.char_from,
                 c.char_img,
                 c.char_com,
-                c.create_at
+                c.create_at,
+                (SELECT COUNT(*) FROM character_favorite f2 WHERE f2.char_id = c.char_id) AS favorite_count
             FROM character_post c
             JOIN character_favorite f ON c.char_id = f.char_id
             LEFT JOIN user u ON c.user_id = u.user_id
@@ -1144,6 +1168,62 @@ def favorite_character_list(user_id):
     finally:
         if conn:
             conn.close()
+# 查看收藏某条番剧的用户列表
+@app.route("/anime/<int:ani_id>/favorite/users", methods=["GET"])
+def anime_favorite_users(ani_id):
+    conn = None
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            sql = """
+            SELECT
+                u.user_id,
+                u.user_name,
+                u.photo,
+                f.create_at
+            FROM anime_favorite f
+            JOIN user u ON f.user_id = u.user_id
+            WHERE f.ani_id = %s
+            ORDER BY f.create_at DESC
+            """
+            cur.execute(sql, (ani_id,))
+            rows = cur.fetchall()
+        return ok("获取成功", rows)
+    except Exception as e:
+        return fail(f"获取失败：{e}")
+    finally:
+        if conn:
+            conn.close()
+
+
+# 查看收藏某条角色的用户列表
+@app.route("/character/<int:char_id>/favorite/users", methods=["GET"])
+def character_favorite_users(char_id):
+    conn = None
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            sql = """
+            SELECT
+                u.user_id,
+                u.user_name,
+                u.photo,
+                f.create_at
+            FROM character_favorite f
+            JOIN user u ON f.user_id = u.user_id
+            WHERE f.char_id = %s
+            ORDER BY f.create_at DESC
+            """
+            cur.execute(sql, (char_id,))
+            rows = cur.fetchall()
+        return ok("获取成功", rows)
+    except Exception as e:
+        return fail(f"获取失败：{e}")
+    finally:
+        if conn:
+            conn.close()
+
+
             
 if __name__ == "__main__":
     port = int(os.environ.get("FLASK_PORT", "5001"))

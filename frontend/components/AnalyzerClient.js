@@ -2,12 +2,20 @@
 
 import { useMemo, useState } from "react";
 import { analyzeAnimeList, recommendAnimeList } from "../lib/api";
+import {
+  downloadPersonalityReport,
+  generatePersonalityReportBlob,
+  getShareCapabilities,
+  sharePersonalityReport,
+} from "../lib/personalityReportImage";
 import PersonalityCard from "./PersonalityCard";
 import RadarChart from "./RadarChart";
 import WordCloudPanel from "./WordCloudPanel";
+import ReportShareModal from "./ReportShareModal";
 import MoeLabel from "./MoeLabel";
 import {
   btnPrimaryClass,
+  btnSecondaryClass,
   inputClass,
   panelClass,
   panelInkClass,
@@ -56,18 +64,6 @@ const CONFIG = {
     "suspense",
     "logic",
     "narrative",
-  ],
-  cloudFallback: [
-    { name: "治愈", value: 12 },
-    { name: "幻想", value: 10 },
-    { name: "关系", value: 9 },
-    { name: "黑暗", value: 8 },
-    { name: "热血", value: 7 },
-    { name: "日常", value: 6 },
-    { name: "音乐", value: 5 },
-    { name: "校园", value: 5 },
-    { name: "成长", value: 4 },
-    { name: "情感", value: 4 },
   ],
 };
 
@@ -132,6 +128,10 @@ export default function AnalyzerClient() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportMessage, setReportMessage] = useState("");
+  const [reportShareOpen, setReportShareOpen] = useState(false);
+  const [reportShareBlob, setReportShareBlob] = useState(null);
 
   const [recMode, setRecMode] = useState("content");
   const [recLimit, setRecLimit] = useState(10);
@@ -156,6 +156,41 @@ export default function AnalyzerClient() {
       setError(submitError.message);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleGenerateReport(share = false) {
+    if (!result?.primary_type) return;
+
+    setReportLoading(true);
+    setReportMessage("");
+
+    try {
+      const blob = await generatePersonalityReportBlob(result, parsedItems);
+      if (share) {
+        const caps = getShareCapabilities(blob);
+        if (caps.mobile && caps.canShareFile && !caps.inWeChat) {
+          const shareResult = await sharePersonalityReport(blob);
+          if (shareResult.ok) {
+            setReportMessage("已通过系统分享面板发送");
+            return;
+          }
+          if (shareResult.reason === "cancelled") {
+            setReportShareBlob(blob);
+            setReportShareOpen(true);
+            return;
+          }
+        }
+        setReportShareBlob(blob);
+        setReportShareOpen(true);
+      } else {
+        downloadPersonalityReport(blob);
+        setReportMessage("报告图已保存");
+      }
+    } catch (reportError) {
+      setReportMessage(reportError.message || "报告图生成失败");
+    } finally {
+      setReportLoading(false);
     }
   }
 
@@ -367,6 +402,32 @@ export default function AnalyzerClient() {
                 {result?.analysis || "分析完成后，这里会生成一段娱乐向解释文本。"}
               </p>
             </div>
+            {result?.primary_type ? (
+              <div className="relative z-[1] mt-6 space-y-2">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className={btnSecondaryClass}
+                    disabled={reportLoading}
+                    onClick={() => handleGenerateReport(false)}
+                  >
+                    {reportLoading ? "生成中…" : "保存报告图"}
+                  </button>
+                  <button
+                    type="button"
+                    className={btnPrimaryClass}
+                    disabled={reportLoading}
+                    onClick={() => handleGenerateReport(true)}
+                  >
+                    {reportLoading ? "生成中…" : "分享报告图"}
+                  </button>
+                </div>
+                <p className="text-xs leading-5 text-stone-400">
+                  生成竖版 PNG（高度随内容自适应），含主人格、词云、维度雷达、特质与解读。
+                </p>
+                {reportMessage ? <p className="text-xs text-stone-300">{reportMessage}</p> : null}
+              </div>
+            ) : null}
           </div>
         ) : (
           <div className={panelInkClass}>
@@ -434,7 +495,7 @@ export default function AnalyzerClient() {
                 <h2 className="font-display text-xl text-stone-800">偏好词云</h2>
                 <span className="text-sm text-stone-500">聚合标签权重</span>
               </div>
-              <WordCloudPanel data={result?.feature_cloud || []} fallbackData={CONFIG.cloudFallback} />
+              <WordCloudPanel data={result?.feature_cloud || []} />
             </div>
             <div className={panelClass}>
               <div className="flex items-center justify-between">
@@ -487,6 +548,11 @@ export default function AnalyzerClient() {
           </section>
         </>
       ) : null}
+      <ReportShareModal
+        open={reportShareOpen}
+        blob={reportShareBlob}
+        onClose={() => setReportShareOpen(false)}
+      />
     </main>
   );
 }

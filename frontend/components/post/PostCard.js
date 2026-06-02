@@ -2,24 +2,39 @@
 
 import { getPostDefaultImage, resolvePostImageUrl } from "../../lib/postApi";
 
-const DEFAULT_IMG = getPostDefaultImage();
-
-export default function PostCard({ item, onDelete, onEdit, canDelete, canEdit, onFavorite, isFav }) {
+export default function PostCard({
+  item,
+  onDelete,
+  onEdit,
+  canDelete,
+  canEdit,
+  onFavorite,
+  isFav,
+  onAuthorClick,
+  favoriteCountClickable,
+  onFavoriteCountClick,
+}) {
   const isAnime = Boolean(item.ani_id);
   const title = item.ani_name || item.char_name;
   const meta = item.ani_type || (item.char_from ? `出自：${item.char_from}` : "");
   const comment = item.ani_com || item.char_com || "";
-  const image = resolvePostImageUrl(item.ani_img || item.char_img) || DEFAULT_IMG;
+  const image = resolvePostImageUrl(item.ani_img || item.char_img) || getPostDefaultImage();
   const author = item.user_name;
+  const favoriteCount = Number(item.favorite_count) || 0;
 
   return (
     <article className="sketch-card overflow-hidden p-0">
-      <div className="relative aspect-[3/4] border-b-[1.5px] border-stone-800 bg-white">
+      <div className="relative aspect-[3/4] w-full shrink-0 overflow-hidden border-b-[1.5px] border-stone-800 bg-stone-100">
         <img
           src={image}
           alt={title}
-          className="h-full w-full object-cover"
-          onError={(e) => (e.currentTarget.src = DEFAULT_IMG)}
+          className="absolute inset-0 h-full w-full object-cover"
+          loading="lazy"
+          decoding="async"
+          onError={(e) => {
+            e.currentTarget.onerror = null;
+            e.currentTarget.src = getPostDefaultImage();
+          }}
         />
 
         {onFavorite && (
@@ -48,12 +63,40 @@ export default function PostCard({ item, onDelete, onEdit, canDelete, canEdit, o
           </div>
         )}
       </div>
+
       <div className="p-4">
         <h3 className="text-base font-semibold text-ink">{title}</h3>
-        {author && <p className="mt-1 text-xs text-slate-500">@{author}</p>}
+        {author && (
+          <p className="mt-1 text-xs">
+            {onAuthorClick ? (
+              <button
+                type="button"
+                className="text-slate-500 hover:text-slate-700 hover:underline"
+                onClick={() => onAuthorClick(item.user_id)}
+              >
+                @{author}
+              </button>
+            ) : (
+              <span className="text-slate-500">@{author}</span>
+            )}
+          </p>
+        )}
         {meta && <p className="mt-2 text-xs text-slate-500">{meta}</p>}
         {comment && <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-600">{comment}</p>}
-        <span className="sketch-badge mt-2">{isAnime ? "番剧" : "角色"}</span>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <span className="sketch-badge">{isAnime ? "番剧" : "角色"}</span>
+          {favoriteCountClickable ? (
+            <button
+              type="button"
+              className="text-[11px] text-slate-400 hover:text-slate-600 hover:underline"
+              onClick={() => onFavoriteCountClick?.(item)}
+            >
+              收藏 {favoriteCount}
+            </button>
+          ) : (
+            <span className="text-[11px] text-slate-400">收藏 {favoriteCount}</span>
+          )}
+        </div>
       </div>
     </article>
   );

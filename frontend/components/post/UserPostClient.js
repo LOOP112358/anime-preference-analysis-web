@@ -7,6 +7,8 @@ import {
   deleteAnime,
   deleteCharacter,
   fetchAnimeList,
+  fetchAnimeFavoriteUsers,
+  fetchCharacterFavoriteUsers,
   fetchCharacterList,
   fetchFavoriteAnime,
   fetchFavoriteCharacters,
@@ -30,6 +32,7 @@ import { clearPostSession, getPostSession, getPostUserId, setPostSession } from 
 import MoeLabel from "../MoeLabel";
 import { btnPrimaryClass, btnSecondaryClass, inputClass, panelClass, tabButtonClasses } from "../ui";
 import AvatarUploadModal from "./AvatarUploadModal";
+import FavoriteUsersModal from "./FavoriteUsersModal";
 import PostCard from "./PostCard";
 import ProfileEditModal, { displayIntro } from "./ProfileEditModal";
 import PublishModal from "./PublishModal";
@@ -109,6 +112,11 @@ export default function UserPostClient() {
   const [avatarUploadOpen, setAvatarUploadOpen] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  const [viewingUserId, setViewingUserId] = useState(null);
+  const [viewedProfile, setViewedProfile] = useState(null);
+  const [viewedProfileLoading, setViewedProfileLoading] = useState(false);
+  const [favoriteUsersModal, setFavoriteUsersModal] = useState(null);
 
   const defaultAvatar = getPostDefaultAvatar();
 
@@ -218,10 +226,84 @@ export default function UserPostClient() {
     if (session.userId) loadLists(session.userId);
   }, [session.userId, loadLists]);
 
+  const loadViewedProfile = useCallback(async (userId) => {
+    const id = Number(userId);
+    if (!id) return;
+
+    setViewingUserId(id);
+    setViewedProfileLoading(true);
+    setViewedProfile(null);
+    try {
+      const [user, anime, chars] = await Promise.all([
+        fetchUserProfile(id),
+        fetchUserAnime(id),
+        fetchUserCharacters(id),
+      ]);
+      setViewedProfile({
+        user,
+        items: [...(anime || []), ...(chars || [])],
+      });
+    } catch (e) {
+      showToast(e.message || "加载用户主页失败");
+      setViewingUserId(null);
+      setViewedProfile(null);
+    } finally {
+      setViewedProfileLoading(false);
+    }
+  }, []);
+
+  const openUserProfile = useCallback(
+    (userId) => {
+      const id = Number(userId);
+      if (!id) return;
+
+      setPage("profile");
+      setSearch("");
+      if (id === Number(session.userId)) {
+        setViewingUserId(null);
+        setViewedProfile(null);
+        return;
+      }
+      loadViewedProfile(id);
+    },
+    [session.userId, loadViewedProfile],
+  );
+
+  const openFavoriteUsers = async (item) => {
+    const title = item.ani_name || item.char_name || "这条内容";
+    setFavoriteUsersModal({ title, users: [], loading: true });
+
+    try {
+      const users = item.ani_id
+        ? await fetchAnimeFavoriteUsers(item.ani_id)
+        : await fetchCharacterFavoriteUsers(item.char_id);
+      setFavoriteUsersModal({ title, users: users || [], loading: false });
+    } catch (e) {
+      showToast(e.message || "加载收藏用户失败");
+      setFavoriteUsersModal(null);
+    }
+  };
+
   const isFavorited = useCallback(
     (item) => (item.ani_id ? favAnimeIds.has(item.ani_id) : favCharIds.has(item.char_id)),
     [favAnimeIds, favCharIds],
   );
+
+  const bumpFavoriteCount = useCallback((item, delta) => {
+    const patch = (list) =>
+      list.map((x) => {
+        const same = item.ani_id ? x.ani_id === item.ani_id : x.char_id === item.char_id;
+        if (!same) return x;
+        const cur = Number(x.favorite_count) || 0;
+        return { ...x, favorite_count: Math.max(0, cur + delta) };
+      });
+
+    setAnimeList(patch);
+    setCharList(patch);
+    setProfileItems(patch);
+    setFavAnime(patch);
+    setFavChar(patch);
+  }, []);
 
   const handleFavorite = async (item) => {
     const uid = Number(getPostUserId());
@@ -230,11 +312,13 @@ export default function UserPostClient() {
     const isAnime = Boolean(item.ani_id);
     const id = isAnime ? item.ani_id : item.char_id;
     const alreadyFav = isFavorited(item);
+    const delta = alreadyFav ? -1 : 1;
 
     try {
       if (isAnime) {
         if (alreadyFav) {
           await removeFavoriteAnime(uid, id);
+          bumpFavoriteCount(item, delta);
           setFavAnimeIds((prev) => {
             const next = new Set(prev);
             next.delete(id);
@@ -244,12 +328,17 @@ export default function UserPostClient() {
           showToast("已取消收藏");
         } else {
           await addFavoriteAnime(uid, id);
+          bumpFavoriteCount(item, delta);
           setFavAnimeIds((prev) => new Set(prev).add(id));
-          setFavAnime((prev) => [...prev, item]);
+          setFavAnime((prev) => [
+            ...prev,
+            { ...item, favorite_count: (Number(item.favorite_count) || 0) + delta },
+          ]);
           showToast("已收藏");
         }
       } else if (alreadyFav) {
         await removeFavoriteCharacter(uid, id);
+        bumpFavoriteCount(item, delta);
         setFavCharIds((prev) => {
           const next = new Set(prev);
           next.delete(id);
@@ -259,8 +348,12 @@ export default function UserPostClient() {
         showToast("已取消收藏");
       } else {
         await addFavoriteCharacter(uid, id);
+        bumpFavoriteCount(item, delta);
         setFavCharIds((prev) => new Set(prev).add(id));
-        setFavChar((prev) => [...prev, item]);
+        setFavChar((prev) => [
+          ...prev,
+          { ...item, favorite_count: (Number(item.favorite_count) || 0) + delta },
+        ]);
         showToast("已收藏");
       }
     } catch (e) {
@@ -277,6 +370,20 @@ export default function UserPostClient() {
     else if (favScope === "char") items = favChar;
     return filterItems(items, search);
   }, [favAnime, favChar, favScope, search]);
+
+  const profileUid = Number(session.userId) || 0;
+  const isOwnProfile = !viewingUserId || (profileUid > 0 && viewingUserId === profileUid);
+  const totalFavoritesReceived = useMemo(() => {
+    const sumItems = (items) =>
+      (items || []).reduce((sum, item) => sum + (Number(item.favorite_count) || 0), 0);
+
+    if (!profileUid) return 0;
+    if (!viewingUserId || viewingUserId === profileUid) return sumItems(profileItems);
+
+    const fromApi = viewedProfile?.user?.total_favorites_received;
+    if (fromApi != null) return Number(fromApi) || 0;
+    return sumItems(viewedProfile?.items);
+  }, [profileUid, viewingUserId, profileItems, viewedProfile]);
 
   async function handleLogin(e) {
     e.preventDefault();
@@ -476,14 +583,22 @@ export default function UserPostClient() {
     );
   }
 
-  const uid = Number(session.userId);
+  const uid = profileUid;
   const publishKind = page === "char" ? "character" : "anime";
+  const profileUser = isOwnProfile
+    ? session
+    : {
+        userId: viewedProfile?.user?.user_id || viewingUserId,
+        userName: viewedProfile?.user?.user_name || "…",
+        photo: viewedProfile?.user?.photo || "",
+        intro: viewedProfile?.user?.user_intro || "",
+      };
 
   let list = [];
   let title = "";
   if (page === "profile") {
-    list = filteredProfile;
-    title = "我的发布";
+    list = isOwnProfile ? filteredProfile : filterItems(viewedProfile?.items || [], search);
+    title = isOwnProfile ? "我的发布" : `${profileUser.userName} 的发布`;
   } else if (page === "anime") {
     list = filteredAnime;
     title = "全部番剧";
@@ -496,9 +611,10 @@ export default function UserPostClient() {
   }
 
   const showFavoriteAction = page === "anime" || page === "char" || page === "favorites";
+  const profileListLoading = page === "profile" && !isOwnProfile && viewedProfileLoading;
 
   function renderCardGrid(items) {
-    if (listLoading) {
+    if (listLoading || profileListLoading) {
       return (
         <div className="col-span-full flex min-h-[18rem] w-full items-center justify-center sm:min-h-[22rem]">
           <p className="text-slate-500">加载中…</p>
@@ -516,12 +632,15 @@ export default function UserPostClient() {
       <PostCard
         key={`${item.ani_id ? "a" : "c"}-${item.ani_id || item.char_id}`}
         item={item}
-        canDelete={item.user_id === uid}
-        canEdit={item.user_id === uid}
+        canDelete={item.user_id === uid && isOwnProfile}
+        canEdit={item.user_id === uid && isOwnProfile}
         onEdit={openEdit}
         onDelete={() => handleDelete(item)}
         onFavorite={showFavoriteAction ? handleFavorite : undefined}
         isFav={isFavorited(item)}
+        onAuthorClick={openUserProfile}
+        favoriteCountClickable={page === "profile" && isOwnProfile && item.user_id === uid}
+        onFavoriteCountClick={openFavoriteUsers}
       />
     ));
   }
@@ -544,63 +663,122 @@ export default function UserPostClient() {
       <div className="flex w-full flex-col gap-6 lg:flex-row lg:items-stretch">
         <aside className={`${panelClass} w-full shrink-0 lg:w-[220px]`}>
           <nav className="flex flex-col gap-1">
-            {PAGES.map((p) => (
+            {PAGES.map((p) => {
+              const navActive =
+                p.id === "profile" ? page === p.id && isOwnProfile : page === p.id;
+
+              return (
               <button
                 key={p.id}
-                className={tabButtonClasses(page === p.id)}
+                className={tabButtonClasses(navActive)}
                 onClick={() => {
                   setPage(p.id);
                   setSearch("");
+                  if (p.id === "profile") {
+                    setViewingUserId(null);
+                    setViewedProfile(null);
+                  }
                   if (p.id === "favorites") setFavScope("all");
                 }}
               >
                 {p.label}
               </button>
-            ))}
+              );
+            })}
           </nav>
         </aside>
 
         <div className="flex min-w-0 w-full flex-1 flex-col gap-6">
           {page === "profile" && (
             <div className={`${panelClass} w-full`}>
-              <input
-                ref={avatarInputRef}
-                type="file"
-                accept={AVATAR_ACCEPT.join(",")}
-                className="hidden"
-                onChange={handleAvatarFilePick}
-              />
-              <button
-                type="button"
-                className="group relative h-24 w-24 shrink-0 rounded-full"
-                onClick={() => avatarInputRef.current?.click()}
-                aria-label="更换头像"
-              >
-                <img
-                  src={session.photo ? resolvePostImageUrl(session.photo) : defaultAvatar}
-                  alt=""
-                  className="h-24 w-24 rounded-full border border-stone-300 object-cover bg-stone-100"
-                  onError={(e) => {
-                    e.currentTarget.src = defaultAvatar;
-                  }}
-                />
-                <span className="absolute inset-0 flex items-center justify-center rounded-full bg-stone-900/0 text-xs font-medium text-white opacity-0 transition group-hover:bg-stone-900/45 group-hover:opacity-100">
-                  换头像
-                </span>
-              </button>
-              <p className="mt-1 text-xs text-slate-400">点击头像可更换</p>
-              <div className="mt-2">
-                <h2 className="text-xl font-semibold">{session.userName}</h2>
-                <p className="text-sm text-slate-500">ID：{session.userId}</p>
-                <p className="mt-2 text-sm whitespace-pre-wrap">{displayIntro(session.intro)}</p>
-                <button
-                  type="button"
-                  className="btn-secondary mt-2 text-xs"
-                  onClick={() => setProfileEditOpen(true)}
-                >
-                  修改简介
-                </button>
-              </div>
+              {!isOwnProfile && (
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-stone-300 bg-amber-50/80 px-4 py-3">
+                  <p className="text-sm text-stone-700">
+                    正在查看 <span className="font-semibold text-stone-900">{profileUser.userName}</span> 的主页
+                  </p>
+                  <button
+                    type="button"
+                    className={`${btnSecondaryClass} shrink-0 text-sm`}
+                    onClick={() => openUserProfile(uid)}
+                  >
+                    ← 返回我的主页
+                  </button>
+                </div>
+              )}
+              {isOwnProfile ? (
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    accept={AVATAR_ACCEPT.join(",")}
+                    className="hidden"
+                    onChange={handleAvatarFilePick}
+                  />
+                  <div className="flex shrink-0 flex-col items-center sm:items-start">
+                    <button
+                      type="button"
+                      className="group relative h-24 w-24 rounded-full"
+                      onClick={() => avatarInputRef.current?.click()}
+                      aria-label="更换头像"
+                    >
+                      <img
+                        src={session.photo ? resolvePostImageUrl(session.photo) : defaultAvatar}
+                        alt=""
+                        className="h-24 w-24 rounded-full border border-stone-300 object-cover bg-stone-100"
+                        onError={(e) => {
+                          e.currentTarget.src = defaultAvatar;
+                        }}
+                      />
+                      <span className="absolute inset-0 flex items-center justify-center rounded-full bg-stone-900/0 text-xs font-medium text-white opacity-0 transition group-hover:bg-stone-900/45 group-hover:opacity-100">
+                        换头像
+                      </span>
+                    </button>
+                    <p className="mt-1 text-xs text-slate-400">点击头像可更换</p>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h2 className="text-xl font-semibold">{session.userName}</h2>
+                        <p className="mt-1 text-sm text-slate-500">ID：{session.userId}</p>
+                      </div>
+                      <p className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm text-amber-800">
+                        总被收藏 <span className="font-semibold">{totalFavoritesReceived}</span>
+                      </p>
+                    </div>
+                    <p className="mt-3 text-sm leading-6 whitespace-pre-wrap">{displayIntro(session.intro)}</p>
+                    <button
+                      type="button"
+                      className="btn-secondary mt-3 text-xs"
+                      onClick={() => setProfileEditOpen(true)}
+                    >
+                      修改简介
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                  <img
+                    src={profileUser.photo ? resolvePostImageUrl(profileUser.photo) : defaultAvatar}
+                    alt=""
+                    className="h-24 w-24 shrink-0 rounded-full border border-stone-300 object-cover bg-stone-100"
+                    onError={(e) => {
+                      e.currentTarget.src = defaultAvatar;
+                    }}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h2 className="text-xl font-semibold">{profileUser.userName}</h2>
+                        <p className="mt-1 text-sm text-slate-500">ID：{profileUser.userId}</p>
+                      </div>
+                      <p className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm text-amber-800">
+                        总被收藏 <span className="font-semibold">{totalFavoritesReceived}</span>
+                      </p>
+                    </div>
+                    <p className="mt-3 text-sm leading-6 whitespace-pre-wrap">{displayIntro(profileUser.intro)}</p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -631,7 +809,11 @@ export default function UserPostClient() {
             )}
 
             {(page === "anime" || page === "char") && (
-              <p className="text-xs text-slate-500 mb-4">支持按发布者昵称搜索，输入 @昵称 可仅筛选该用户</p>
+              <p className="text-xs text-slate-500 mb-4">支持按发布者昵称搜索，输入 @昵称 可仅筛选该用户；点击 @昵称 可进入用户主页</p>
+            )}
+
+            {page === "profile" && isOwnProfile && (
+              <p className="text-xs text-slate-500 mb-4">点击卡片上的「收藏 N」可查看是谁收藏了你的发布</p>
             )}
 
             {listError && <p className="text-red-600 text-sm mb-4">{listError}</p>}
@@ -668,6 +850,17 @@ export default function UserPostClient() {
         uploading={avatarUploading}
         onConfirm={handleAvatarCropConfirm}
         onClose={closeAvatarUpload}
+      />
+      <FavoriteUsersModal
+        open={Boolean(favoriteUsersModal)}
+        title={favoriteUsersModal?.title || ""}
+        users={favoriteUsersModal?.users || []}
+        loading={favoriteUsersModal?.loading}
+        onClose={() => setFavoriteUsersModal(null)}
+        onUserClick={(userId) => {
+          setFavoriteUsersModal(null);
+          openUserProfile(userId);
+        }}
       />
     </main>
   );
