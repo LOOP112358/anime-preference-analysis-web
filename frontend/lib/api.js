@@ -66,11 +66,11 @@ export async function fetchSiteVisitCount() {
   return payload.data.page_views;
 }
 
-export async function submitFeedback({ message, contact }) {
+export async function submitFeedback({ message, nickname }) {
   const response = await fetch(`${API_BASE_URL}/feedback`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, contact }),
+    body: JSON.stringify({ message, nickname }),
   });
   const payload = await response.json();
   if (!response.ok || !payload.success) {

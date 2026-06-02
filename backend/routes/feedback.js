@@ -7,7 +7,7 @@ router.post("/", (req, res, next) => {
   try {
     const entry = saveFeedback({
       message: req.body?.message,
-      contact: req.body?.contact,
+      nickname: req.body?.nickname,
     });
 
     res.json({

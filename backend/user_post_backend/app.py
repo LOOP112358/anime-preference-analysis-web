@@ -2,7 +2,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from dotenv import load_dotenv
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 import os
@@ -145,109 +145,175 @@ def upload_image():
     })
 
 
-# 根据番剧名获取：封面 + 类型
-def get_anime_info(ani_name):
-    info = {
-        "ani_img": DEFAULT_IMG,
-        "ani_type": "未知"
-    }
+def is_allowed_image_proxy(url):
+    try:
+        from urllib.parse import urlparse
+        host = urlparse(url).netloc.lower()
+        return host.endswith("bgm.tv") or host.endswith("bangumi.tv")
+    except Exception:
+        return False
 
+
+@app.route("/proxy/image", methods=["GET"])
+def proxy_image():
+    url = request.args.get("url", "").strip()
+    if not url.startswith("http") or not is_allowed_image_proxy(url):
+        return fail("无效或不支持的图片地址")
+
+    try:
+        r = requests.get(
+            url,
+            headers={"User-Agent": "anime-web-course-project/1.0"},
+            timeout=12,
+        )
+        if r.status_code != 200:
+            return fail("图片获取失败")
+
+        content_type = r.headers.get("Content-Type", "image/jpeg")
+        return Response(r.content, mimetype=content_type)
+    except Exception as exc:
+        return fail(f"图片代理失败：{exc}")
+
+
+@app.route("/preview/anime", methods=["GET"])
+def preview_anime():
+    name = request.args.get("name", "").strip()
+    if not name:
+        return fail("番剧名称不能为空")
+    limit = min(max(int(request.args.get("limit", 5)), 1), 5)
+    return ok("获取成功", {"results": search_anime_candidates(name, limit)})
+
+
+@app.route("/preview/character", methods=["GET"])
+def preview_character():
+    name = request.args.get("name", "").strip()
+    if not name:
+        return fail("角色名称不能为空")
+    limit = min(max(int(request.args.get("limit", 5)), 1), 5)
+    return ok("获取成功", {"results": search_character_candidates(name, limit)})
+
+
+def extract_bangumi_image(images):
+    if not images:
+        return None
+    return (
+        images.get("large")
+        or images.get("common")
+        or images.get("medium")
+        or images.get("small")
+        or images.get("grid")
+    )
+
+
+def search_anime_candidates(ani_name, limit=5):
     if not ani_name:
-        return info
+        return []
 
     try:
         url = "https://api.bgm.tv/v0/search/subjects"
-
         body = {
             "keyword": ani_name,
             "sort": "match",
-            "filter": {
-                "type": [2]
-            }
+            "filter": {"type": [2]},
         }
-
         headers = {
             "User-Agent": "anime-web-course-project/1.0",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
-
         r = requests.post(url, json=body, headers=headers, timeout=8)
-
         if r.status_code != 200:
-            return info
+            return []
 
-        result = r.json()
-        data = result.get("data", [])
+        results = []
+        for anime in r.json().get("data", []):
+            img_url = extract_bangumi_image(anime.get("images", {}))
+            if not img_url:
+                continue
 
-        if len(data) == 0:
-            return info
+            tags = anime.get("tags", [])
+            type_list = [tag.get("name") for tag in tags[:5] if tag.get("name")]
 
-        anime = data[0]
+            results.append({
+                "id": anime.get("id"),
+                "name": anime.get("name") or "",
+                "name_cn": anime.get("name_cn") or "",
+                "ani_img": img_url,
+                "ani_type": ",".join(type_list) if type_list else "未知",
+                "date": anime.get("date") or "",
+            })
 
-        images = anime.get("images", {})
-        img_url = images.get("large") or images.get("common") or images.get("medium")
+            if len(results) >= limit:
+                break
 
-        if img_url:
-            info["ani_img"] = img_url
-
-        tags = anime.get("tags", [])
-        type_list = []
-
-        for tag in tags[:5]:
-            name = tag.get("name")
-            if name:
-                type_list.append(name)
-
-        if len(type_list) > 0:
-            info["ani_type"] = ",".join(type_list)
-
+        return results
     except Exception as e:
-        print("获取番剧信息失败：", e)
+        print("搜索番剧失败：", e)
+        return []
 
-    return info
+
+def search_character_candidates(char_name, limit=5):
+    if not char_name:
+        return []
+
+    try:
+        url = "https://api.bgm.tv/v0/search/characters"
+        body = {
+            "keyword": char_name,
+            "sort": "match",
+        }
+        headers = {
+            "User-Agent": "anime-web-course-project/1.0",
+            "Content-Type": "application/json",
+        }
+        r = requests.post(url, json=body, headers=headers, timeout=8)
+        if r.status_code != 200:
+            return []
+
+        results = []
+        for char in r.json().get("data", []):
+            img_url = extract_bangumi_image(char.get("images", {}))
+            if not img_url:
+                continue
+
+            summary = (char.get("summary") or "").strip().replace("\n", " ")
+            if len(summary) > 80:
+                summary = summary[:80] + "…"
+
+            results.append({
+                "id": char.get("id"),
+                "name": char.get("name") or "",
+                "name_cn": char.get("name_cn") or "",
+                "char_img": img_url,
+                "summary": summary,
+            })
+
+            if len(results) >= limit:
+                break
+
+        return results
+    except Exception as e:
+        print("搜索角色失败：", e)
+        return []
+
+
+# 根据番剧名获取：封面 + 类型
+def get_anime_info(ani_name):
+    candidates = search_anime_candidates(ani_name, limit=1)
+    if not candidates:
+        return {"ani_img": DEFAULT_IMG, "ani_type": "未知"}
+    first = candidates[0]
+    return {
+        "ani_img": first["ani_img"],
+        "ani_type": first["ani_type"],
+    }
 
 
 # 根据角色名从 Bangumi 获取角色图片
 def find_character_image(char_name):
-    if not char_name:
+    candidates = search_character_candidates(char_name, limit=1)
+    if not candidates:
         return DEFAULT_IMG
-
-    try:
-        url = "https://api.bgm.tv/v0/search/characters"
-
-        body = {
-            "keyword": char_name,
-            "sort": "match"
-        }
-
-        headers = {
-            "User-Agent": "anime-web-course-project/1.0",
-            "Content-Type": "application/json"
-        }
-
-        r = requests.post(url, json=body, headers=headers, timeout=8)
-
-        if r.status_code != 200:
-            return DEFAULT_IMG
-
-        result = r.json()
-        data = result.get("data", [])
-
-        if len(data) == 0:
-            return DEFAULT_IMG
-
-        char = data[0]
-
-        images = char.get("images", {})
-        img_url = images.get("large") or images.get("medium") or images.get("small") or images.get("grid")
-
-        if img_url:
-            return img_url
-
-    except Exception as e:
-        print("获取角色图片失败：", e)
-
-    return DEFAULT_IMG
+    return candidates[0]["char_img"]
 
 
 # 用户注册
@@ -1020,9 +1086,19 @@ def favorite_anime_list(user_id):
         conn = get_conn()
         with conn.cursor() as cur:
             sql = """
-            SELECT a.ani_id, a.ani_name, a.ani_img, a.ani_type, a.ani_com, a.create_at
+            SELECT
+                a.ani_id,
+                a.user_id,
+                u.user_name,
+                u.photo,
+                a.ani_name,
+                a.ani_img,
+                a.ani_type,
+                a.ani_com,
+                a.create_at
             FROM anime_post a
             JOIN anime_favorite f ON a.ani_id = f.ani_id
+            LEFT JOIN user u ON a.user_id = u.user_id
             WHERE f.user_id=%s
             ORDER BY f.create_at DESC
             """
@@ -1044,9 +1120,19 @@ def favorite_character_list(user_id):
         conn = get_conn()
         with conn.cursor() as cur:
             sql = """
-            SELECT c.char_id, c.char_name, c.char_from, c.char_img, c.char_com, c.create_at
+            SELECT
+                c.char_id,
+                c.user_id,
+                u.user_name,
+                u.photo,
+                c.char_name,
+                c.char_from,
+                c.char_img,
+                c.char_com,
+                c.create_at
             FROM character_post c
             JOIN character_favorite f ON c.char_id = f.char_id
+            LEFT JOIN user u ON c.user_id = u.user_id
             WHERE f.user_id=%s
             ORDER BY f.create_at DESC
             """
@@ -1060,4 +1146,5 @@ def favorite_character_list(user_id):
             conn.close()
             
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5001, debug=False, use_reloader=False)
+    port = int(os.environ.get("FLASK_PORT", "5001"))
+    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)

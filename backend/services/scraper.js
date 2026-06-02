@@ -3,10 +3,13 @@ import * as cheerio from "cheerio";
 import { HttpsProxyAgent } from "https-proxy-agent";
 
 const USER_AGENT =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
+  process.env.SCRAPER_USER_AGENT ||
+  "AcgPreferenceAnalyzer/1.0 (+https://github.com/LOOP112358/anime-preference-analysis-web; wiki fallback) Mozilla/5.0 (compatible; AcgPreferenceAnalyzer/1.0)";
 
 /** 单次 HTTP 超时（ms）。Bangumi 一次抓取含搜索页 + 条目页两次请求。 */
 const FETCH_TIMEOUT_MS = Number(process.env.SCRAPER_FETCH_TIMEOUT_MS || 12000);
+
+const WIKIPEDIA_API = "https://zh.wikipedia.org/w/api.php";
 
 function formatScrapeError(reason) {
   if (!reason) {
@@ -19,7 +22,7 @@ function formatScrapeError(reason) {
   return reason.message || reason.code || String(reason);
 }
 
-function getFetchAxiosConfig() {
+function getFetchAxiosConfig(proxyUrl = process.env.SCRAPER_HTTPS_PROXY || process.env.HTTPS_PROXY) {
   const config = {
     timeout: FETCH_TIMEOUT_MS,
     headers: {
@@ -27,7 +30,6 @@ function getFetchAxiosConfig() {
       "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
     },
   };
-  const proxyUrl = process.env.SCRAPER_HTTPS_PROXY || process.env.HTTPS_PROXY;
   if (proxyUrl) {
     config.httpsAgent = new HttpsProxyAgent(proxyUrl);
     config.proxy = false;
@@ -35,8 +37,25 @@ function getFetchAxiosConfig() {
   return config;
 }
 
-async function fetchHtml(url) {
-  const response = await axios.get(url, getFetchAxiosConfig());
+/** 维基可走独立代理；仅当你在本机真的运行了代理程序时才需要填写 */
+function getWikiAxiosConfig() {
+  const wikiProxy = process.env.SCRAPER_WIKI_PROXY || process.env.SCRAPER_HTTPS_PROXY || process.env.HTTPS_PROXY;
+  return getFetchAxiosConfig(wikiProxy || undefined);
+}
+
+let lastSupplementRequestAt = 0;
+
+async function throttleSupplementRequest() {
+  const gapMs = Number(process.env.SCRAPER_WIKI_DELAY_MS || 900);
+  const waitMs = lastSupplementRequestAt + gapMs - Date.now();
+  if (waitMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
+  }
+  lastSupplementRequestAt = Date.now();
+}
+
+async function fetchHtml(url, configFactory = getFetchAxiosConfig) {
+  const response = await axios.get(url, configFactory());
   return response.data;
 }
 
@@ -90,10 +109,77 @@ function parseWikipediaPage(html, requestedTitle) {
   };
 }
 
+async function scrapeMediaWikiApi(title, { apiUrl, source, getConfig = getFetchAxiosConfig }) {
+  const response = await axios.get(apiUrl, {
+    ...getConfig(),
+    params: {
+      action: "query",
+      prop: "extracts|categories",
+      exintro: 1,
+      explaintext: 1,
+      cllimit: 20,
+      titles: title,
+      format: "json",
+      formatversion: 2,
+      redirects: 1,
+    },
+  });
+
+  const page = response.data?.query?.pages?.[0];
+  if (!page || page.missing) {
+    throw new Error(`No ${source} page found for ${title}`);
+  }
+
+  const categories = (page.categories || [])
+    .map((item) => compactText(String(item.title || "").replace(/^Category:/i, "")))
+    .filter(Boolean);
+
+  const paragraphs = String(page.extract || "")
+    .split(/\n+/)
+    .map(compactText)
+    .filter(Boolean);
+
+  return {
+    source,
+    title: compactText(page.title) || title,
+    moe_tags: [],
+    categories: dedupeList(categories),
+    text: sliceUsefulParagraphs(paragraphs).join(" "),
+  };
+}
+
 async function scrapeWikipedia(title) {
-  const url = `https://zh.wikipedia.org/wiki/${encodeURIComponent(title)}`;
-  const html = await fetchHtml(url);
-  return parseWikipediaPage(html, title);
+  await throttleSupplementRequest();
+  try {
+    return await scrapeMediaWikiApi(title, {
+      apiUrl: WIKIPEDIA_API,
+      source: "wikipedia",
+      getConfig: getWikiAxiosConfig,
+    });
+  } catch {
+    const url = `https://zh.wikipedia.org/wiki/${encodeURIComponent(title)}`;
+    const html = await fetchHtml(url, getWikiAxiosConfig);
+    return parseWikipediaPage(html, title);
+  }
+}
+
+async function scrapeWikipediaWithFallback(titles) {
+  const queries = dedupeList(titles.filter(Boolean));
+  const errors = [];
+
+  for (const query of queries) {
+    try {
+      const result = await scrapeWikipedia(query);
+      if (isMeaningfulResult(result)) {
+        return { result, errors };
+      }
+      errors.push(`wikipedia(${query}): page has no usable categories or intro text`);
+    } catch (reason) {
+      errors.push(`wikipedia(${query}): ${formatScrapeError(reason)}`);
+    }
+  }
+
+  return { result: null, errors };
 }
 
 function parseBangumiSearchResult(html) {
@@ -243,7 +329,7 @@ function mergeResults(title, results, errors) {
     .map((item) => item.text)
     .filter(Boolean)
     .join(" ")
-    .slice(0, 2400);
+    .slice(0, 3200);
 
   return {
     source: validResults.map((item) => item.source).join("+"),
@@ -258,23 +344,26 @@ function mergeResults(title, results, errors) {
 
 export async function scrapeAnime(title) {
   const errors = [];
-  const [bangumiSettled, wikiSettled] = await Promise.allSettled([
-    scrapeBangumi(title),
-    scrapeWikipedia(title),
-  ]);
-
   let bangumiResult = null;
-  if (bangumiSettled.status === "fulfilled") {
-    bangumiResult = bangumiSettled.value;
-  } else {
-    errors.push(`bangumi: ${formatScrapeError(bangumiSettled.reason)}`);
+
+  try {
+    bangumiResult = await scrapeBangumi(title);
+  } catch (reason) {
+    errors.push(`bangumi: ${formatScrapeError(reason)}`);
   }
 
+  const wikiQueries = dedupeList([
+    bangumiResult?.title,
+    title,
+    // 部分中文条目维基用简体名，Bangumi 可能是日文名
+    String(title || "").replace(/\s+/g, ""),
+  ]);
+
   let wikiResult = null;
-  if (wikiSettled.status === "fulfilled") {
-    wikiResult = wikiSettled.value;
-  } else {
-    errors.push(`wikipedia: ${formatScrapeError(wikiSettled.reason)}`);
+  if (process.env.SCRAPER_WIKI_ENABLED !== "0") {
+    const wikiAttempt = await scrapeWikipediaWithFallback(wikiQueries);
+    wikiResult = wikiAttempt.result;
+    errors.push(...wikiAttempt.errors);
   }
 
   const meaningful = [bangumiResult, wikiResult].filter(isMeaningfulResult);
