@@ -120,4 +120,6 @@ jobs:
             fi
             test -f "$APP_DIR/frontend/.next/BUILD_ID"
             curl -fsS "http://127.0.0.1:4100/health" > /dev/null
+            curl -fsS "http://127.0.0.1:3001/api/stats/visit" > /dev/null
+            curl -fsS "http://127.0.0.1:3001/post-api/character/list" > /dev/null
             echo "Verification passed for $DEPLOY_TAG"

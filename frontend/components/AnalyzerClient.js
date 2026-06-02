@@ -159,10 +159,10 @@ export default function AnalyzerClient() {
 
   function closeReportPreview() {
     setReportPreviewOpen(false);
-    if (reportPreviewUrl) {
+    if (reportPreviewUrl.startsWith("blob:")) {
       URL.revokeObjectURL(reportPreviewUrl);
-      setReportPreviewUrl("");
     }
+    setReportPreviewUrl("");
   }
 
   async function handleGenerateReport() {
@@ -173,7 +173,7 @@ export default function AnalyzerClient() {
 
     try {
       const blob = await generatePersonalityReportBlob(result, parsedItems);
-      const saveResult = savePersonalityReport(blob);
+      const saveResult = await savePersonalityReport(blob);
       if (saveResult.mode === "preview") {
         setReportPreviewUrl(saveResult.url);
         setReportPreviewOpen(true);

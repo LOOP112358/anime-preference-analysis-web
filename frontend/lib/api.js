@@ -1,7 +1,22 @@
-/** 生产 build 走同源 /api（Nginx 反代）；本地 dev 直连 4100 */
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  (process.env.NODE_ENV === "production" ? "/api" : "http://localhost:4100/api");
+/**
+ * 浏览器端始终走同源 /api（Nginx 或 next.config 反代到 Node :4100）。
+ * 切勿在浏览器使用构建时写入的 localhost，否则手机会连到自己的 127.0.0.1。
+ */
+function getApiBaseUrl() {
+  if (typeof window !== "undefined") {
+    return "/api";
+  }
+
+  if (process.env.NEXT_PUBLIC_API_BASE_URL) {
+    return process.env.NEXT_PUBLIC_API_BASE_URL.replace(/\/$/, "");
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    return "/api";
+  }
+
+  return "http://localhost:4100/api";
+}
 
 async function postJson(path, body, { timeoutMs = 90000 } = {}) {
   const controller = new AbortController();
@@ -9,7 +24,7 @@ async function postJson(path, body, { timeoutMs = 90000 } = {}) {
 
   let response;
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
+    response = await fetch(`${getApiBaseUrl()}${path}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -45,7 +60,7 @@ export function recommendAnimeList(body) {
 
 /** 记录一次访问并返回累计访问量 */
 export async function recordSiteVisit() {
-  const response = await fetch(`${API_BASE_URL}/stats/visit`, {
+  const response = await fetch(`${getApiBaseUrl()}/stats/visit`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
   });
@@ -58,7 +73,7 @@ export async function recordSiteVisit() {
 
 /** 仅读取累计访问量（不 +1） */
 export async function fetchSiteVisitCount() {
-  const response = await fetch(`${API_BASE_URL}/stats/visit`);
+  const response = await fetch(`${getApiBaseUrl()}/stats/visit`);
   const payload = await response.json();
   if (!response.ok || !payload.success) {
     throw new Error(payload.error || "访问统计失败");
@@ -67,7 +82,7 @@ export async function fetchSiteVisitCount() {
 }
 
 export async function submitFeedback({ message, nickname }) {
-  const response = await fetch(`${API_BASE_URL}/feedback`, {
+  const response = await fetch(`${getApiBaseUrl()}/feedback`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message, nickname }),

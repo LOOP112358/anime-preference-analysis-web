@@ -469,9 +469,26 @@ export function isWeChatBrowser() {
   return /MicroMessenger/i.test(navigator.userAgent);
 }
 
-export function savePersonalityReport(blob) {
-  if (isWeChatBrowser()) {
-    return { mode: "preview", url: URL.createObjectURL(blob) };
+function isMobileBrowser() {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("报告图转换失败"));
+    reader.readAsDataURL(blob);
+  });
+}
+
+export async function savePersonalityReport(blob) {
+  if (isWeChatBrowser() || isMobileBrowser()) {
+    const url = await blobToDataUrl(blob);
+    return { mode: "preview", url };
   }
 
   downloadPersonalityReport(blob);
