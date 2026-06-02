@@ -453,30 +453,6 @@ export async function generatePersonalityReportBlob(result, animeList = []) {
   });
 }
 
-export function getShareCapabilities(blob) {
-  const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
-  const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
-  const inWeChat = /MicroMessenger/i.test(ua);
-
-  let canShareFile = false;
-  if (blob && typeof navigator !== "undefined" && navigator.canShare) {
-    try {
-      const file = new File([blob], "acg-personality-report.png", { type: "image/png" });
-      canShareFile = navigator.canShare({ files: [file] });
-    } catch {
-      canShareFile = false;
-    }
-  }
-
-  const canCopyImage = Boolean(
-    typeof navigator !== "undefined" &&
-      navigator.clipboard?.write &&
-      typeof ClipboardItem !== "undefined",
-  );
-
-  return { mobile, inWeChat, canShareFile, canCopyImage };
-}
-
 export function downloadPersonalityReport(blob, filename = "acg-personality-report.png") {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -484,42 +460,4 @@ export function downloadPersonalityReport(blob, filename = "acg-personality-repo
   anchor.download = filename;
   anchor.click();
   URL.revokeObjectURL(url);
-}
-
-export async function copyPersonalityReportToClipboard(blob) {
-  if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
-    return false;
-  }
-
-  try {
-    await navigator.clipboard.write([
-      new ClipboardItem({
-        "image/png": blob,
-      }),
-    ]);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export async function sharePersonalityReport(blob) {
-  const file = new File([blob], "acg-personality-report.png", { type: "image/png" });
-  if (!navigator.canShare?.({ files: [file] })) {
-    return { ok: false, reason: "unsupported" };
-  }
-
-  try {
-    await navigator.share({
-      files: [file],
-      title: "我的 ACG 偏好人格报告",
-      text: "来看看我的动画偏好人格分析～",
-    });
-    return { ok: true, reason: "shared" };
-  } catch (error) {
-    if (error?.name === "AbortError") {
-      return { ok: false, reason: "cancelled" };
-    }
-    return { ok: false, reason: "failed", error };
-  }
 }

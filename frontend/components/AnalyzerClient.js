@@ -5,13 +5,10 @@ import { analyzeAnimeList, recommendAnimeList } from "../lib/api";
 import {
   downloadPersonalityReport,
   generatePersonalityReportBlob,
-  getShareCapabilities,
-  sharePersonalityReport,
 } from "../lib/personalityReportImage";
 import PersonalityCard from "./PersonalityCard";
 import RadarChart from "./RadarChart";
 import WordCloudPanel from "./WordCloudPanel";
-import ReportShareModal from "./ReportShareModal";
 import MoeLabel from "./MoeLabel";
 import {
   btnPrimaryClass,
@@ -130,8 +127,6 @@ export default function AnalyzerClient() {
   const [error, setError] = useState("");
   const [reportLoading, setReportLoading] = useState(false);
   const [reportMessage, setReportMessage] = useState("");
-  const [reportShareOpen, setReportShareOpen] = useState(false);
-  const [reportShareBlob, setReportShareBlob] = useState(null);
 
   const [recMode, setRecMode] = useState("content");
   const [recLimit, setRecLimit] = useState(10);
@@ -159,7 +154,7 @@ export default function AnalyzerClient() {
     }
   }
 
-  async function handleGenerateReport(share = false) {
+  async function handleGenerateReport() {
     if (!result?.primary_type) return;
 
     setReportLoading(true);
@@ -167,26 +162,8 @@ export default function AnalyzerClient() {
 
     try {
       const blob = await generatePersonalityReportBlob(result, parsedItems);
-      if (share) {
-        const caps = getShareCapabilities(blob);
-        if (caps.mobile && caps.canShareFile && !caps.inWeChat) {
-          const shareResult = await sharePersonalityReport(blob);
-          if (shareResult.ok) {
-            setReportMessage("已通过系统分享面板发送");
-            return;
-          }
-          if (shareResult.reason === "cancelled") {
-            setReportShareBlob(blob);
-            setReportShareOpen(true);
-            return;
-          }
-        }
-        setReportShareBlob(blob);
-        setReportShareOpen(true);
-      } else {
-        downloadPersonalityReport(blob);
-        setReportMessage("报告图已保存");
-      }
+      downloadPersonalityReport(blob);
+      setReportMessage("报告图已保存");
     } catch (reportError) {
       setReportMessage(reportError.message || "报告图生成失败");
     } finally {
@@ -404,24 +381,14 @@ export default function AnalyzerClient() {
             </div>
             {result?.primary_type ? (
               <div className="relative z-[1] mt-6 space-y-2">
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    className={btnSecondaryClass}
-                    disabled={reportLoading}
-                    onClick={() => handleGenerateReport(false)}
-                  >
-                    {reportLoading ? "生成中…" : "保存报告图"}
-                  </button>
-                  <button
-                    type="button"
-                    className={btnPrimaryClass}
-                    disabled={reportLoading}
-                    onClick={() => handleGenerateReport(true)}
-                  >
-                    {reportLoading ? "生成中…" : "分享报告图"}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  className={btnPrimaryClass}
+                  disabled={reportLoading}
+                  onClick={handleGenerateReport}
+                >
+                  {reportLoading ? "生成中…" : "保存报告图"}
+                </button>
                 <p className="text-xs leading-5 text-stone-400">
                   生成竖版 PNG（高度随内容自适应），含主人格、词云、维度雷达、特质与解读。
                 </p>
@@ -548,11 +515,6 @@ export default function AnalyzerClient() {
           </section>
         </>
       ) : null}
-      <ReportShareModal
-        open={reportShareOpen}
-        blob={reportShareBlob}
-        onClose={() => setReportShareOpen(false)}
-      />
     </main>
   );
 }
