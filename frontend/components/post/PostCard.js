@@ -4,12 +4,11 @@ import { useState } from "react";
 import { getPostDefaultImage, resolvePostImageUrl } from "../../lib/postApi";
 import PostCommentModal from "./PostCommentModal";
 
-const COMMENT_PREVIEW_THRESHOLD = 88;
-
+/** 超出 3 行预览时显示「查看全文」 */
 function commentNeedsExpand(comment) {
   if (!comment) return false;
-  if (comment.length > COMMENT_PREVIEW_THRESHOLD) return true;
-  return comment.split("\n").length > 3;
+  if (comment.split("\n").length > 3) return true;
+  return comment.length > 72;
 }
 
 export default function PostCard({
@@ -96,13 +95,7 @@ export default function PostCard({
         )}
         {meta && <p className="mt-2 text-xs text-slate-500">{meta}</p>}
         {comment ? (
-          <div className="mt-2">
-            {showExpand ? (
-              <p className="line-clamp-3 text-sm leading-6 text-slate-600">{comment}</p>
-            ) : (
-              <p className="text-sm leading-6 text-slate-600">{comment}</p>
-            )}
-          </div>
+          <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-600">{comment}</p>
         ) : null}
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <span className="sketch-badge">{isAnime ? "番剧" : "角色"}</span>
