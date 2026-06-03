@@ -49,17 +49,21 @@ jobs:
         uses: appleboy/ssh-action@master
         env:
           DEPLOY_SHA: ${{ github.sha }}
+          SERVER_IP: ${{ secrets.SERVER_IP }}
         with:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SERVER_PORT }}
-          envs: DEPLOY_SHA
+          envs: DEPLOY_SHA,SERVER_IP
           script: |
             set -euo pipefail
 
             APP_DIR="/opt/anime-app"
             DEPLOY_TAG="${DEPLOY_SHA:0:7}"
+            PUBLIC_ORIGIN="http://${SERVER_IP}"
+            PUBLIC_ORIGIN_WITH_PORT="http://${SERVER_IP}:3001"
+            WEB_ORIGINS="$PUBLIC_ORIGIN,$PUBLIC_ORIGIN_WITH_PORT,http://127.0.0.1:3001,http://localhost:3001"
             echo "$DEPLOY_SHA" > "$APP_DIR/DEPLOYED_SHA"
             echo "Deploying commit $DEPLOY_TAG (frontend pre-built on CI)"
 
@@ -75,21 +79,21 @@ jobs:
             cd "$APP_DIR/backend"
             npm install --production
             pm2 delete acg-node-backend 2>/dev/null || true
-            PORT=4100 CORS_ORIGIN="http://127.0.0.1:3001,http://localhost:3001" \
-              pm2 start app.js --name acg-node-backend --cwd "$APP_DIR/backend"
+            PORT=4100 CORS_ORIGIN="$WEB_ORIGINS" \
+              pm2 start app.js --name acg-node-backend --cwd "$APP_DIR/backend" --update-env
 
             echo "====== Deploying Python Backend ======"
             cd "$APP_DIR/backend/user_post_backend"
             export FLASK_PORT=5001
-            export CORS_ORIGIN="http://127.0.0.1:3001,http://localhost:3001"
+            export CORS_ORIGIN="$WEB_ORIGINS"
             if [ -d "venv" ]; then
               source venv/bin/activate
               pm2 delete acg-py-backend 2>/dev/null || true
-              pm2 start app.py --name acg-py-backend --cwd "$APP_DIR/backend/user_post_backend" --interpreter ./venv/bin/python
+              pm2 start app.py --name acg-py-backend --cwd "$APP_DIR/backend/user_post_backend" --interpreter ./venv/bin/python --update-env
             else
               pip install -r requirements.txt
               pm2 delete acg-py-backend 2>/dev/null || true
-              pm2 start app.py --name acg-py-backend --cwd "$APP_DIR/backend/user_post_backend" --interpreter python3
+              pm2 start app.py --name acg-py-backend --cwd "$APP_DIR/backend/user_post_backend" --interpreter python3 --update-env
             fi
 
             echo "====== Starting Next.js Frontend (skip server build) ======"
@@ -99,7 +103,7 @@ jobs:
 
             pm2 delete acg-frontend 2>/dev/null || true
             API_PROXY_ORIGIN="http://127.0.0.1:4100" POST_API_PROXY_ORIGIN="http://127.0.0.1:5001" \
-              pm2 start npm --name acg-frontend --cwd "$APP_DIR/frontend" -- run start -- -p 3001
+              pm2 start npm --name acg-frontend --cwd "$APP_DIR/frontend" --update-env -- run start -- -p 3001 -H 0.0.0.0
 
             pm2 save
             pm2 ls
@@ -109,12 +113,13 @@ jobs:
         uses: appleboy/ssh-action@master
         env:
           DEPLOY_SHA: ${{ github.sha }}
+          SERVER_IP: ${{ secrets.SERVER_IP }}
         with:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SERVER_PORT }}
-          envs: DEPLOY_SHA
+          envs: DEPLOY_SHA,SERVER_IP
           script: |
             set -euo pipefail
             APP_DIR="/opt/anime-app"
@@ -126,6 +131,9 @@ jobs:
             fi
             test -f "$APP_DIR/frontend/.next/BUILD_ID"
             curl -fsS "http://127.0.0.1:4100/health" > /dev/null
+            curl -fsS "http://127.0.0.1:5001/health" > /dev/null
             curl -fsS "http://127.0.0.1:3001/api/stats/visit" > /dev/null
+            curl -fsS "http://127.0.0.1:3001/post-api/health" > /dev/null
             curl -fsS "http://127.0.0.1:3001/post-api/character/list" > /dev/null
+            curl -fsS "http://127.0.0.1:3001/community" > /dev/null
             echo "Verification passed for $DEPLOY_TAG"
