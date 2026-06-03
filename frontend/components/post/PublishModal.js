@@ -269,7 +269,9 @@ export default function PublishModal({ open, kind, editItem, onClose, onSubmit, 
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             placeholder="评价"
+            maxLength={255}
           />
+          <p className="text-right text-xs text-stone-400">{comment.length}/255</p>
 
           <div className="rounded-lg border border-dashed border-stone-300 bg-stone-50/80 p-3">
             <input
