@@ -1,4 +1,4 @@
-const API = "http://127.0.0.1:5001";
+const API = window.POST_API_BASE || "/post-api";
 
 const uid = () => localStorage.getItem("user_id") || "";
 const setUser = (d) => {

@@ -27,6 +27,8 @@ jobs:
       - name: Build Frontend on CI
         env:
           NEXT_PUBLIC_BUILD_SHA: ${{ github.sha }}
+          API_PROXY_ORIGIN: http://127.0.0.1:4100
+          POST_API_PROXY_ORIGIN: http://127.0.0.1:5001
         run: |
           npm ci
           npm run build --workspace frontend
@@ -73,10 +75,13 @@ jobs:
             cd "$APP_DIR/backend"
             npm install --production
             pm2 delete acg-node-backend 2>/dev/null || true
-            pm2 start app.js --name acg-node-backend --cwd "$APP_DIR/backend"
+            PORT=4100 CORS_ORIGIN="http://127.0.0.1:3001,http://localhost:3001" \
+              pm2 start app.js --name acg-node-backend --cwd "$APP_DIR/backend"
 
             echo "====== Deploying Python Backend ======"
             cd "$APP_DIR/backend/user_post_backend"
+            export FLASK_PORT=5001
+            export CORS_ORIGIN="http://127.0.0.1:3001,http://localhost:3001"
             if [ -d "venv" ]; then
               source venv/bin/activate
               pm2 delete acg-py-backend 2>/dev/null || true
@@ -93,7 +98,8 @@ jobs:
             test -f .next/BUILD_ID || (echo "Missing .next from CI sync" && exit 1)
 
             pm2 delete acg-frontend 2>/dev/null || true
-            pm2 start npm --name acg-frontend --cwd "$APP_DIR/frontend" -- run start -- -p 3001
+            API_PROXY_ORIGIN="http://127.0.0.1:4100" POST_API_PROXY_ORIGIN="http://127.0.0.1:5001" \
+              pm2 start npm --name acg-frontend --cwd "$APP_DIR/frontend" -- run start -- -p 3001
 
             pm2 save
             pm2 ls

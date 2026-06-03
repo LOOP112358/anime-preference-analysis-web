@@ -14,14 +14,20 @@ load_dotenv(BASE_DIR / ".env")
 
 app = Flask(__name__)
 
+allowed_origins = [
+    origin.strip()
+    for origin in os.environ.get(
+        "CORS_ORIGIN",
+        "http://localhost:3001,http://127.0.0.1:3001",
+    ).split(",")
+    if origin.strip()
+]
+
 CORS(
     app,
     resources={
         r"/*": {
-            "origins": [
-                "http://localhost:3001",
-                "http://127.0.0.1:3001",
-            ]
+            "origins": allowed_origins
         }
     },
 )
