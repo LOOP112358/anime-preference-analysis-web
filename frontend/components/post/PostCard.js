@@ -1,15 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getPostDefaultImage, resolvePostImageUrl } from "../../lib/postApi";
 import PostCommentModal from "./PostCommentModal";
-
-/** 超出 3 行预览时显示「查看全文」 */
-function commentNeedsExpand(comment) {
-  if (!comment) return false;
-  if (comment.split("\n").length > 3) return true;
-  return comment.length > 72;
-}
 
 export default function PostCard({
   item,
@@ -24,6 +17,8 @@ export default function PostCard({
   onFavoriteCountClick,
 }) {
   const [commentOpen, setCommentOpen] = useState(false);
+  const [showExpand, setShowExpand] = useState(false);
+  const commentRef = useRef(null);
 
   const isAnime = Boolean(item.ani_id);
   const title = item.ani_name || item.char_name;
@@ -32,7 +27,29 @@ export default function PostCard({
   const image = resolvePostImageUrl(item.ani_img || item.char_img) || getPostDefaultImage();
   const author = item.user_name;
   const favoriteCount = Number(item.favorite_count) || 0;
-  const showExpand = commentNeedsExpand(comment);
+
+  useEffect(() => {
+    const el = commentRef.current;
+    if (!el || !comment) {
+      setShowExpand(false);
+      return undefined;
+    }
+
+    const checkTruncated = () => {
+      setShowExpand(el.scrollHeight > el.clientHeight + 1);
+    };
+
+    checkTruncated();
+
+    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(checkTruncated) : null;
+    observer?.observe(el);
+    window.addEventListener("resize", checkTruncated);
+
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", checkTruncated);
+    };
+  }, [comment]);
 
   return (
     <article className="sketch-card overflow-hidden p-0">
@@ -95,7 +112,9 @@ export default function PostCard({
         )}
         {meta && <p className="mt-2 text-xs text-slate-500">{meta}</p>}
         {comment ? (
-          <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-600">{comment}</p>
+          <p ref={commentRef} className="mt-2 line-clamp-3 text-sm leading-6 text-slate-600">
+            {comment}
+          </p>
         ) : null}
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <span className="sketch-badge">{isAnime ? "番剧" : "角色"}</span>
