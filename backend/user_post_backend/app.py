@@ -719,19 +719,25 @@ def delete_anime():
     try:
         conn = get_conn()
         with conn.cursor() as cur:
-            sql = """
-            DELETE FROM anime_post
-            WHERE ani_id=%s AND user_id=%s
-            """
-            cur.execute(sql, (ani_id, user_id))
-            conn.commit()
-
-            if cur.rowcount == 0:
+            cur.execute(
+                "SELECT ani_id FROM anime_post WHERE ani_id=%s AND user_id=%s",
+                (ani_id, user_id),
+            )
+            if not cur.fetchone():
                 return fail("删除失败，可能不是你的番剧卡片")
+
+            cur.execute("DELETE FROM anime_favorite WHERE ani_id=%s", (ani_id,))
+            cur.execute(
+                "DELETE FROM anime_post WHERE ani_id=%s AND user_id=%s",
+                (ani_id, user_id),
+            )
+        conn.commit()
 
         return ok("番剧删除成功")
 
     except Exception as e:
+        if conn:
+            conn.rollback()
         return fail("番剧删除失败：" + str(e))
 
     finally:
@@ -915,19 +921,25 @@ def delete_character():
     try:
         conn = get_conn()
         with conn.cursor() as cur:
-            sql = """
-            DELETE FROM character_post
-            WHERE char_id=%s AND user_id=%s
-            """
-            cur.execute(sql, (char_id, user_id))
-            conn.commit()
-
-            if cur.rowcount == 0:
+            cur.execute(
+                "SELECT char_id FROM character_post WHERE char_id=%s AND user_id=%s",
+                (char_id, user_id),
+            )
+            if not cur.fetchone():
                 return fail("删除失败，可能不是你的角色卡片")
+
+            cur.execute("DELETE FROM character_favorite WHERE char_id=%s", (char_id,))
+            cur.execute(
+                "DELETE FROM character_post WHERE char_id=%s AND user_id=%s",
+                (char_id, user_id),
+            )
+        conn.commit()
 
         return ok("角色删除成功")
 
     except Exception as e:
+        if conn:
+            conn.rollback()
         return fail("角色删除失败：" + str(e))
 
     finally:
@@ -1241,7 +1253,6 @@ def character_favorite_users(char_id):
             conn.close()
 
 
-            
 if __name__ == "__main__":
     port = int(os.environ.get("FLASK_PORT", "5001"))
     app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)

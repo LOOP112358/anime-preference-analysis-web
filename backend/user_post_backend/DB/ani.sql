@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS anime_favorite (
     PRIMARY KEY (user_id, ani_id),
 
     FOREIGN KEY (user_id) REFERENCES user(user_id),
-    FOREIGN KEY (ani_id) REFERENCES anime_post(ani_id)
+    FOREIGN KEY (ani_id) REFERENCES anime_post(ani_id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS character_favorite (
@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS character_favorite (
     PRIMARY KEY (user_id, char_id),
 
     FOREIGN KEY (user_id) REFERENCES user(user_id),
-    FOREIGN KEY (char_id) REFERENCES character_post(char_id)
+    FOREIGN KEY (char_id) REFERENCES character_post(char_id) ON DELETE CASCADE
 );
 
 SELECT 
